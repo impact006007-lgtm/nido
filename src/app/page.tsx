@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 
 const supabase = createBrowserClient(
@@ -37,7 +37,18 @@ export default function Home() {
   const [resultat, setResultat] = useState<any>(null)
   const [erreur, setErreur] = useState('')
   const [drag, setDrag] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        window.location.replace('/auth')
+      } else {
+        setAuthChecked(true)
+      }
+    })
+  }, [])
 
   const set = (key: keyof FormData, val: any) => setForm(p => ({ ...p, [key]: val }))
 
@@ -78,6 +89,8 @@ export default function Home() {
   }
 
   function reset() { setResultat(null); setEtape('annonce'); setForm(INITIAL_FORM); setErreur('') }
+
+  if (!authChecked) return null
 
   return (
     <>
