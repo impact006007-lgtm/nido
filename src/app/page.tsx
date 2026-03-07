@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { genererPDF } from '@/lib/NidoPDF'
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -749,6 +750,13 @@ function Rapport({ data, form, onReset }: { data: any, form: FormData, onReset: 
 
       <div className="nouvelle-analyse">
         <button className="btn-sec" onClick={onReset}>← Nouvelle analyse</button>
+        <button
+          className="btn-primary"
+          style={{ marginLeft: '12px' }}
+          onClick={() => genererPDF(data, form.ville, form.typeBien)}
+        >
+          ↓ Télécharger le rapport PDF
+        </button>
       </div>
 
     </div>
