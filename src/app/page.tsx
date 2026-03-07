@@ -2,7 +2,6 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
-import { genererPDF } from '@/lib/NidoPDF'
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -462,6 +461,10 @@ export default function Home() {
 }
 
 function Rapport({ data, form, onReset }: { data: any, form: FormData, onReset: () => void }) {
+  async function telechargerPDF() {
+    const { genererPDF } = await import('@/lib/NidoPDF')
+    await genererPDF(data, form.ville, form.typeBien)
+  }
   const v = data.verdict
   const decision = v?.decision || 'NÉGOCIER'
   const cls = decision === 'ACHETER' ? 'acheter' : decision === 'FUIR' ? 'fuir' : 'negocier'
@@ -753,7 +756,7 @@ function Rapport({ data, form, onReset }: { data: any, form: FormData, onReset: 
         <button
           className="btn-primary"
           style={{ marginLeft: '12px' }}
-          onClick={() => genererPDF(data, form.ville, form.typeBien)}
+          onClick={telechargerPDF}
         >
           ↓ Télécharger le rapport PDF
         </button>
