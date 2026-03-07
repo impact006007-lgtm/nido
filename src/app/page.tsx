@@ -302,12 +302,20 @@ export default function Home() {
         <div className="header">
           <div className="logo">NID<em>O</em></div>
           <div className="tagline">Analyse immobilière par intelligence artificielle</div>
-          <button
-            onClick={async () => { await supabase.auth.signOut(); window.location.href = '/auth' }}
-            style={{ marginTop: '12px', background: 'transparent', border: '1px solid #d9d2c7', borderRadius: '7px', padding: '6px 14px', fontSize: '11px', color: '#a09480', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', letterSpacing: '0.06em' }}
-          >
-            Déconnexion
-          </button>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '12px' }}>
+            <a
+              href="/dashboard"
+              style={{ background: 'transparent', border: '1px solid #d9d2c7', borderRadius: '7px', padding: '6px 14px', fontSize: '11px', color: '#a09480', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', letterSpacing: '0.06em', textDecoration: 'none' }}
+            >
+              Mes analyses
+            </a>
+            <button
+              onClick={async () => { await supabase.auth.signOut(); window.location.href = '/auth' }}
+              style={{ background: 'transparent', border: '1px solid #d9d2c7', borderRadius: '7px', padding: '6px 14px', fontSize: '11px', color: '#a09480', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', letterSpacing: '0.06em' }}
+            >
+              Déconnexion
+            </button>
+          </div>
         </div>
 
         {!resultat && (
