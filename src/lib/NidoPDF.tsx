@@ -7,7 +7,8 @@ function fmt(n: number | undefined | null): string {
 }
 
 const styles = StyleSheet.create({
-  page: { fontFamily: 'Helvetica', backgroundColor: '#f5f2ed', padding: 0 },
+  page: { fontFamily: 'Helvetica', backgroundColor: '#f5f2ed', paddingTop: 0 },
+  pageContent: { paddingTop: 0 },
   header: { backgroundColor: '#1a1814', paddingHorizontal: 40, paddingVertical: 28, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   logo: { fontSize: 36, color: '#ffffff', fontFamily: 'Helvetica-Bold' },
   headerRight: { alignItems: 'flex-end' },
@@ -114,6 +115,9 @@ export function NidoPDFDocument({ data, ville, typeBien }: { data: any, ville?: 
             </View>
           )}
         </View>
+
+        {/* Espace en haut des pages suivantes */}
+        <View style={{ height: 24, backgroundColor: '#f5f2ed' }} fixed />
 
         <View style={styles.body}>
 
