@@ -21,7 +21,7 @@ const styles = StyleSheet.create({
   scoreCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#1a1814', alignItems: 'center', justifyContent: 'center' },
   scoreNum: { fontSize: 28, fontFamily: 'Helvetica-Bold', color: '#ffffff', lineHeight: 1 },
   scoreDenom: { fontSize: 10, color: '#8b6914' },
-  body: { paddingHorizontal: 40, paddingBottom: 70 },
+  body: { paddingHorizontal: 40, paddingBottom: 90 },
   scoresRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
   scoreBox: { flex: 1, backgroundColor: '#ffffff', borderRadius: 8, padding: 10, alignItems: 'center', border: '1pt solid #e8e2d9' },
   scoreBoxLabel: { fontSize: 7, color: '#a09480', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 4 },
@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
   visiteNum: { fontSize: 16, color: '#e8e2d9', fontFamily: 'Helvetica-Bold', width: 20, flexShrink: 0, lineHeight: 1 },
   visitePoint: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#1a1814', marginBottom: 2 },
   visiteDetail: { fontSize: 8, color: '#8a7d6b', lineHeight: 1.5 },
-  footer: { position: 'absolute', bottom: 16, left: 40, right: 40, flexDirection: 'row', justifyContent: 'space-between' },
+  footer: { position: 'absolute', bottom: 20, left: 40, right: 40, flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#f5f2ed', paddingTop: 6 },
   footerText: { fontSize: 7, color: '#c4b99a', letterSpacing: 0.5 },
 })
 
@@ -199,20 +199,20 @@ export function NidoPDFDocument({ data, ville, typeBien }: { data: any, ville?: 
                   <Text style={[styles.tableHeaderCell, styles.col3]}>Max</Text>
                   <Text style={[styles.tableHeaderCell, styles.col4]}>Urgence</Text>
                 </View>
-                <View style={styles.tableRow}>
+                <View style={styles.tableRow} wrap={false}>
                   <Text style={[styles.tableCell, styles.col1]}>Prix d'achat</Text>
                   <Text style={[styles.tableCell, styles.col2]}>{fmt(data.budget.prix_demande)} €</Text>
                   <Text style={[styles.tableCell, styles.col3]}>—</Text>
                   <Text style={[styles.tableCell, styles.col4]}></Text>
                 </View>
-                <View style={styles.tableRow}>
+                <View style={styles.tableRow} wrap={false}>
                   <Text style={[styles.tableCell, styles.col1]}>Frais de notaire</Text>
                   <Text style={[styles.tableCell, styles.col2]}>{fmt(data.budget.frais_notaire)} €</Text>
                   <Text style={[styles.tableCell, styles.col3]}>—</Text>
                   <Text style={[styles.tableCell, styles.col4]}></Text>
                 </View>
                 {data.budget.detail_travaux?.map((t: any, i: number) => (
-                  <View key={i} style={styles.tableRow}>
+                  <View key={i} style={styles.tableRow} wrap={false}>
                     <Text style={[styles.tableCell, styles.col1]}>{t.poste}</Text>
                     <Text style={[styles.tableCell, styles.col2]}>{fmt(t.min)} €</Text>
                     <Text style={[styles.tableCell, styles.col3]}>{fmt(t.max)} €</Text>
@@ -297,7 +297,7 @@ export function NidoPDFDocument({ data, ville, typeBien }: { data: any, ville?: 
               </View>
               <View style={styles.sectionBody}>
                 {data.visite.map((v: any, i: number) => (
-                  <View key={i} style={[styles.visiteItem, i === data.visite.length - 1 ? { borderBottom: 'none' } : {}]}>
+                  <View key={i} wrap={false} style={[styles.visiteItem, i === data.visite.length - 1 ? { borderBottom: 'none' } : {}]}>
                     <Text style={styles.visiteNum}>{v.priorite || i + 1}</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.visitePoint}>{v.point}</Text>
