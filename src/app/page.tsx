@@ -1,6 +1,12 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 type Etape = 'annonce' | 'photos' | 'analyse'
 
@@ -283,6 +289,12 @@ export default function Home() {
         <div className="header">
           <div className="logo">NID<em>O</em></div>
           <div className="tagline">Analyse immobilière par intelligence artificielle</div>
+          <button
+            onClick={async () => { await supabase.auth.signOut(); window.location.href = '/auth' }}
+            style={{ marginTop: '12px', background: 'transparent', border: '1px solid #d9d2c7', borderRadius: '7px', padding: '6px 14px', fontSize: '11px', color: '#a09480', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', letterSpacing: '0.06em' }}
+          >
+            Déconnexion
+          </button>
         </div>
 
         {!resultat && (
