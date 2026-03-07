@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 
-const supabase = createClient(
+const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
@@ -38,7 +38,7 @@ export default function AuthPage() {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
         if (data.session) {
-          await new Promise(r => setTimeout(r, 500))
+          await new Promise(r => setTimeout(r, 800))
           window.location.replace('/')
         }
       }
@@ -113,7 +113,7 @@ export default function AuthPage() {
           )}
 
           <button className="btn" disabled={loading || !email || !password} onClick={handleSubmit}>
-            {loading ? '…' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
+            {loading ? 'Connexion…' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
           </button>
 
           {mode === 'signup' && (
