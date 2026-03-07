@@ -21,7 +21,7 @@ const styles = StyleSheet.create({
   scoreCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#1a1814', alignItems: 'center', justifyContent: 'center' },
   scoreNum: { fontSize: 28, fontFamily: 'Helvetica-Bold', color: '#ffffff', lineHeight: 1 },
   scoreDenom: { fontSize: 10, color: '#8b6914' },
-  body: { paddingHorizontal: 40, paddingBottom: 50 },
+  body: { paddingHorizontal: 40, paddingBottom: 70 },
   scoresRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
   scoreBox: { flex: 1, backgroundColor: '#ffffff', borderRadius: 8, padding: 10, alignItems: 'center', border: '1pt solid #e8e2d9' },
   scoreBoxLabel: { fontSize: 7, color: '#a09480', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 4 },
@@ -138,7 +138,7 @@ export function NidoPDFDocument({ data, ville, typeBien }: { data: any, ville?: 
 
           {/* Alertes */}
           {data.alertes?.length > 0 && (
-            <View style={styles.sectionCard}>
+            <View style={styles.sectionCard} wrap={false}>
               <View style={styles.sectionHead}>
                 <Text style={[styles.sectionTitle, { color: '#dc2626' }]}>Alertes prioritaires</Text>
               </View>
@@ -156,7 +156,7 @@ export function NidoPDFDocument({ data, ville, typeBien }: { data: any, ville?: 
 
           {/* Marché */}
           {data.marche && (
-            <View style={styles.sectionCard}>
+            <View style={styles.sectionCard} wrap={false}>
               <View style={styles.sectionHead}>
                 <Text style={[styles.sectionTitle, { color: '#1d4ed8' }]}>Prix de marché</Text>
               </View>
@@ -185,7 +185,7 @@ export function NidoPDFDocument({ data, ville, typeBien }: { data: any, ville?: 
 
           {/* Budget */}
           {data.budget && (
-            <View style={styles.sectionCard}>
+            <View style={styles.sectionCard} wrap={true}>
               <View style={styles.sectionHead}>
                 <Text style={[styles.sectionTitle, { color: '#92400e' }]}>Budget total réel</Text>
                 <Text style={{ marginLeft: 'auto', fontSize: 13, fontFamily: 'Helvetica-Bold', color: '#1a1814' }}>
@@ -225,7 +225,7 @@ export function NidoPDFDocument({ data, ville, typeBien }: { data: any, ville?: 
 
           {/* Négociation */}
           {data.negociation?.length > 0 && (
-            <View style={styles.sectionCard}>
+            <View style={styles.sectionCard} wrap={false}>
               <View style={styles.sectionHead}>
                 <Text style={[styles.sectionTitle, { color: '#475569' }]}>Scénarios de négociation</Text>
               </View>
@@ -247,7 +247,7 @@ export function NidoPDFDocument({ data, ville, typeBien }: { data: any, ville?: 
 
           {/* Analyse photos */}
           {data.analyse_photos && typeof data.analyse_photos === 'object' && (
-            <View style={styles.sectionCard}>
+            <View style={styles.sectionCard} wrap={false}>
               <View style={styles.sectionHead}>
                 <Text style={[styles.sectionTitle, { color: '#475569' }]}>Analyse visuelle</Text>
               </View>
@@ -266,7 +266,7 @@ export function NidoPDFDocument({ data, ville, typeBien }: { data: any, ville?: 
 
           {/* DPE */}
           {data.dpe_analyse && (
-            <View style={styles.sectionCard}>
+            <View style={styles.sectionCard} wrap={false}>
               <View style={styles.sectionHead}>
                 <Text style={[styles.sectionTitle, { color: '#16a34a' }]}>Énergie & DPE</Text>
               </View>
@@ -291,7 +291,7 @@ export function NidoPDFDocument({ data, ville, typeBien }: { data: any, ville?: 
 
           {/* Visite */}
           {data.visite?.length > 0 && (
-            <View style={styles.sectionCard}>
+            <View style={styles.sectionCard} wrap={true}>
               <View style={styles.sectionHead}>
                 <Text style={[styles.sectionTitle, { color: '#1d4ed8' }]}>Points à vérifier en visite</Text>
               </View>
