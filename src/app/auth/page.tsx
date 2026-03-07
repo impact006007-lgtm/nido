@@ -17,7 +17,6 @@ export default function AuthPage() {
   const [erreur, setErreur] = useState('')
   const [success, setSuccess] = useState('')
 
-  // Code d'invitation — change cette valeur pour contrôler l'accès
   const INVITATION_CODE = process.env.NEXT_PUBLIC_INVITATION_CODE || 'NIDO2026'
 
   async function handleSubmit() {
@@ -32,14 +31,16 @@ export default function AuthPage() {
           setLoading(false)
           return
         }
-
         const { error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
         setSuccess('Compte créé ! Vérifiez votre email pour confirmer.')
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-        window.location.href = '/'
+        if (data.session) {
+          await new Promise(r => setTimeout(r, 500))
+          window.location.replace('/')
+        }
       }
     } catch (e: any) {
       const msgs: Record<string, string> = {
@@ -65,7 +66,7 @@ export default function AuthPage() {
         .logo em { color: #8b6914; font-style: normal; }
         .tagline { font-size: 11px; font-weight: 300; letter-spacing: 0.18em; text-transform: uppercase; color: #a09480; text-align: center; margin-bottom: 40px; }
         .card { background: #fff; border: 1px solid #e8e2d9; border-radius: 16px; padding: 32px; box-shadow: 0 2px 20px rgba(0,0,0,0.05); }
-        .tabs { display: flex; gap: 0; margin-bottom: 28px; border-bottom: 1px solid #e8e2d9; }
+        .tabs { display: flex; margin-bottom: 28px; border-bottom: 1px solid #e8e2d9; }
         .tab { flex: 1; padding: 10px; text-align: center; font-size: 13px; font-weight: 500; color: #a09480; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; margin-bottom: -1px; }
         .tab.active { color: #1a1814; border-bottom-color: #8b6914; }
         .label { display: block; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: #8a7d6b; margin-bottom: 6px; }
@@ -116,7 +117,7 @@ export default function AuthPage() {
           </button>
 
           {mode === 'signup' && (
-            <div className="hint">Vous avez besoin d'un code d'invitation.<br />Contactez-nous sur <em>nido@email.com</em></div>
+            <div className="hint">Vous avez besoin d'un code d'invitation.<br />Contactez-nous sur <em>contact@nido.immo</em></div>
           )}
         </div>
       </div>
