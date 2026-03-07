@@ -185,7 +185,7 @@ export function NidoPDFDocument({ data, ville, typeBien }: { data: any, ville?: 
 
           {/* Budget */}
           {data.budget && (
-            <View style={styles.sectionCard} wrap={true}>
+            <View style={styles.sectionCard} wrap={false}>
               <View style={styles.sectionHead}>
                 <Text style={[styles.sectionTitle, { color: '#92400e' }]}>Budget total réel</Text>
                 <Text style={{ marginLeft: 'auto', fontSize: 13, fontFamily: 'Helvetica-Bold', color: '#1a1814' }}>
@@ -291,7 +291,7 @@ export function NidoPDFDocument({ data, ville, typeBien }: { data: any, ville?: 
 
           {/* Visite */}
           {data.visite?.length > 0 && (
-            <View style={styles.sectionCard} wrap={true}>
+            <View style={styles.sectionCard} wrap={false}>
               <View style={styles.sectionHead}>
                 <Text style={[styles.sectionTitle, { color: '#1d4ed8' }]}>Points à vérifier en visite</Text>
               </View>
