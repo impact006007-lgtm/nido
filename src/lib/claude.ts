@@ -38,7 +38,7 @@ export async function analyserAnnonce(annonce: AnnonceInput) {
   const message = await client.messages.create({
     model: 'claude-sonnet-4-5',
     max_tokens: 5000,
-    temperature: 0,
+    temperature: 0.3,
     messages: [
       {
         role: 'user',
@@ -74,28 +74,31 @@ SCORE DPE (fixe, pas d'interprétation) :
 A→10, B→8, C→6, D→4, E→2, F→1, G→0, inconnu→4
 
 SCORE ÉTAT BÂTI (basé sur observations factuelles) :
-- Pas de travaux visibles, rénovations récentes → 8-10
-- Quelques travaux mineurs (peinture, joints) → 6-7
-- Travaux moyens (toiture, façade, salle de bain) → 4-5
-- Travaux lourds (structure, charpente, électricité) → 2-3
-- Délabré ou inhabitable → 0-1
+- Neuf ou rénové entièrement, aucun travaux → 9-10
+- Très bon état, rénovations récentes visibles → 7-8
+- Bon état général, quelques travaux mineurs → 6-7
+- État moyen, travaux importants à prévoir (toiture, façade) → 4-5
+- Mauvais état, travaux lourds (structure, électricité) → 2-3
+- Délabré → 0-1
 
 SCORE RAPPORT QUALITÉ/PRIX (basé sur écart prix marché) :
 - Prix > 15% sous marché → 9-10
 - Prix 5-15% sous marché → 7-8
-- Prix dans la moyenne marché (±5%) → 5-6
-- Prix 5-15% au-dessus marché → 3-4
-- Prix > 15% au-dessus marché → 0-2
+- Prix dans la moyenne marché (±5%) → 6
+- Prix 5-10% au-dessus marché → 4-5
+- Prix 10-20% au-dessus marché → 2-3
+- Prix > 20% au-dessus marché → 0-1
 
-SCORE POTENTIEL (localisation + foncier + évolutivité) :
-- Grande ville dynamique, foncier rare, fort potentiel → 8-10
-- Ville moyenne, bon bassin d'emploi → 6-7
-- Zone péri-urbaine, demande modérée → 4-5
-- Zone rurale calme, marché peu liquide → 3-4
-- Zone sinistrée ou très isolée → 0-2
+SCORE POTENTIEL (localisation + dynamisme + évolutivité) :
+- Métropole dynamique, foncier rare → 9-10
+- Grande ville ou couronne métropolitaine → 7-8
+- Ville moyenne avec bassin d'emploi correct → 6-7
+- Zone péri-urbaine ou rural bien situé (< 30min ville) → 5-6
+- Rural isolé, marché peu liquide → 4-5
+- Zone sinistrée ou très isolée → 0-3
 
 SCORE GLOBAL = moyenne arithmétique exacte des 4 scores, arrondie au 0.5 le plus proche.
-Exemple : (6+7+5+6)/4 = 6.0 → 6.0
+Exemple : (6+7+6+5)/4 = 6.0 → 6.0
 
 VERDICT (strict) :
 - Score ≥ 7.0 → ACHETER
