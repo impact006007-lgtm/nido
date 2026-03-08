@@ -22,6 +22,8 @@ interface AnnonceInput {
     budget_max?: number | null
     pieces_min?: number | null
     jardin?: boolean
+    profil_acheteur?: string
+    type_bien_prefere?: string
   } | null
 }
 
@@ -57,7 +59,7 @@ export async function analyserAnnonce(annonce: AnnonceInput) {
             text: `Tu es NIDO, un expert immobilier et expert en bâtiment français, bienveillant mais totalement honnête.
 Date : ${today}
 
-PROFIL DE L'ACHETEUR : ${profilAcheteur || 'non précisé'}
+PROFIL DE L'ACHETEUR : ${profil?.profil_acheteur === 'celibataire' ? 'Célibataire' : profil?.profil_acheteur === 'couple' ? 'Couple sans enfants' : profil?.profil_acheteur === 'famille' ? 'Famille avec enfants' : profil?.profil_acheteur === 'investisseur' ? 'Investisseur' : profilAcheteur || 'non précisé'}
 ${profil ? `
 PROFIL PERSONNALISÉ ACTIF — adapte le scoring en conséquence :
 - Projet : ${profil.projet === 'residence_principale' ? 'Résidence principale' : profil.projet === 'investissement' ? 'Investissement locatif' : profil.projet === 'vacances' ? 'Résidence secondaire' : 'Non précisé'}

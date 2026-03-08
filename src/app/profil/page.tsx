@@ -18,6 +18,8 @@ interface Profil {
   pieces_min: number | null
   jardin: boolean
   est_defaut: boolean
+  profil_acheteur: string
+  type_bien_prefere: string
 }
 
 const EMPTY_PROFIL = {
@@ -29,6 +31,8 @@ const EMPTY_PROFIL = {
   pieces_min: null as number | null,
   jardin: false,
   est_defaut: false,
+  profil_acheteur: '',
+  type_bien_prefere: '',
 }
 
 function genererNom(p: typeof EMPTY_PROFIL): string {
@@ -45,7 +49,7 @@ function genererNom(p: typeof EMPTY_PROFIL): string {
 }
 
 function completionPct(p: any): number {
-  const fields = ['projet', 'zone', 'priorite', 'budget_max', 'pieces_min']
+  const fields = ['projet', 'zone', 'priorite', 'budget_max', 'pieces_min', 'profil_acheteur', 'type_bien_prefere']
   const filled = fields.filter(f => p[f] !== null && p[f] !== '' && p[f] !== undefined).length
   return Math.round((filled / fields.length) * 100)
 }
@@ -78,7 +82,7 @@ export default function ProfilPage() {
   }
 
   function ouvrirEdition(p: Profil) {
-    setForm({ nom: p.nom, projet: p.projet, zone: p.zone, priorite: p.priorite, budget_max: p.budget_max, pieces_min: p.pieces_min, jardin: p.jardin, est_defaut: p.est_defaut })
+    setForm({ nom: p.nom, projet: p.projet, zone: p.zone, priorite: p.priorite, budget_max: p.budget_max, pieces_min: p.pieces_min, jardin: p.jardin, est_defaut: p.est_defaut, profil_acheteur: p.profil_acheteur || '', type_bien_prefere: p.type_bien_prefere || '' })
     setEditing(p.id)
   }
 
@@ -276,6 +280,24 @@ export default function ProfilPage() {
               <div>
                 <label className="label">Nombre de pièces minimum</label>
                 <input className="input" type="number" placeholder="4" value={form.pieces_min || ''} onChange={e => setF('pieces_min', e.target.value ? parseInt(e.target.value) : null)} />
+              </div>
+            </div>
+
+            <div className="form-section">
+              <label className="label">Profil acheteur</label>
+              <div className="chip-row">
+                {[['celibataire', '👤 Célibataire'], ['couple', '👫 Couple sans enfants'], ['famille', '👨‍👩‍👧 Famille avec enfants'], ['investisseur', '📈 Investisseur']].map(([val, label]) => (
+                  <button key={val} className={`chip ${form.profil_acheteur === val ? 'sel' : ''}`} onClick={() => setF('profil_acheteur', form.profil_acheteur === val ? '' : val)}>{label}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="form-section">
+              <label className="label">Type de bien préféré</label>
+              <div className="chip-row">
+                {[['maison', '🏠 Maison'], ['appartement', '🏢 Appartement'], ['les_deux', '↔ Les deux']].map(([val, label]) => (
+                  <button key={val} className={`chip ${form.type_bien_prefere === val ? 'sel' : ''}`} onClick={() => setF('type_bien_prefere', form.type_bien_prefere === val ? '' : val)}>{label}</button>
+                ))}
               </div>
             </div>
 

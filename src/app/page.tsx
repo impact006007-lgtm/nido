@@ -369,13 +369,6 @@ export default function Home() {
               ))}
             </div>
 
-            <label className="label">Profil acheteur</label>
-            <div className="chip-row mb16">
-              {['Célibataire', 'Couple sans enfants', 'Couple avec enfants', 'Investisseur'].map(p => (
-                <button key={p} className={`chip ${form.profilAcheteur === p ? 'sel' : ''}`} onClick={() => set('profilAcheteur', form.profilAcheteur === p ? '' : p)}>{p}</button>
-              ))}
-            </div>
-
             <div className="grid-3 mb16">
               <div>
                 <label className="label">Prix (€)</label>

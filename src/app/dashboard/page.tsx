@@ -39,6 +39,12 @@ export default function Dashboard() {
     await genererPDF(a.rapport_complet, a.ville, a.type_bien)
   }
 
+  async function supprimerAnalyse(id: string) {
+    if (!confirm('Supprimer cette analyse ?')) return
+    await supabase.from('analyses').delete().eq('id', id)
+    setAnalyses(prev => prev.filter(a => a.id !== id))
+  }
+
   function formatDate(iso: string) {
     return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
   }
@@ -84,6 +90,9 @@ export default function Dashboard() {
         .card-btn-voir { background: #faf8f5; border: 1px solid #e8e2d9; color: #4a4035; }
         .card-btn-voir:hover { background: #f0ebe3; }
         .card-btn-pdf { background: #1a1814; border: 1px solid #1a1814; color: #f5f2ed; }
+        .card-btn-pdf:hover { background: #2d2a24; }
+        .card-btn-delete { flex: 0 !important; padding: 7px 10px; background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; }
+        .card-btn-delete:hover { background: #fee2e2; }
         .card-btn-pdf:hover { background: #2d2a24; }
         .card-date { font-size: 10px; color: #c4b99a; text-align: right; padding: 0 18px 12px; }
         .loading { text-align: center; padding: 80px; color: #a09480; font-size: 13px; }
@@ -170,6 +179,7 @@ export default function Dashboard() {
                   <div className="card-actions">
                     <button className="card-btn card-btn-voir" onClick={() => setSelected(a)}>Voir le rapport</button>
                     <button className="card-btn card-btn-pdf" onClick={() => telechargerPDF(a)}>↓ PDF</button>
+                    <button className="card-btn card-btn-delete" onClick={() => supprimerAnalyse(a.id)}>✕</button>
                   </div>
                 </div>
                 <div className="card-date">{formatDate(a.created_at)}</div>
