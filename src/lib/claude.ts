@@ -38,6 +38,7 @@ export async function analyserAnnonce(annonce: AnnonceInput) {
   const message = await client.messages.create({
     model: 'claude-sonnet-4-5',
     max_tokens: 5000,
+    temperature: 0,
     messages: [
       {
         role: 'user',
@@ -67,18 +68,39 @@ ${imagesContent.length > 0 ? `${imagesContent.length} photo(s) jointes.` : 'Aucu
 
 ---
 
-INSTRUCTIONS DE SCORING (applique ces critères fixes, sans variation) :
+INSTRUCTIONS DE SCORING (critères stricts et non négociables) :
 
-Score DPE → A:10, B:8, C:6, D:4, E:2, F:1, G:0
-Score état général → déduit des photos et du texte (0-10)
-Score rapport qualité/prix → basé sur écart prix marché (0-10)
-Score potentiel → localisation + foncier + évolutivité (0-10)
-Score global = moyenne des 4 sous-scores, arrondie à 0.5
+SCORE DPE (fixe, pas d'interprétation) :
+A→10, B→8, C→6, D→4, E→2, F→1, G→0, inconnu→4
 
-Seuils verdict :
-- Score ≥ 7 → ACHETER
-- Score 5-6.5 → NÉGOCIER  
-- Score < 5 → FUIR
+SCORE ÉTAT BÂTI (basé sur observations factuelles) :
+- Pas de travaux visibles, rénovations récentes → 8-10
+- Quelques travaux mineurs (peinture, joints) → 6-7
+- Travaux moyens (toiture, façade, salle de bain) → 4-5
+- Travaux lourds (structure, charpente, électricité) → 2-3
+- Délabré ou inhabitable → 0-1
+
+SCORE RAPPORT QUALITÉ/PRIX (basé sur écart prix marché) :
+- Prix > 15% sous marché → 9-10
+- Prix 5-15% sous marché → 7-8
+- Prix dans la moyenne marché (±5%) → 5-6
+- Prix 5-15% au-dessus marché → 3-4
+- Prix > 15% au-dessus marché → 0-2
+
+SCORE POTENTIEL (localisation + foncier + évolutivité) :
+- Grande ville dynamique, foncier rare, fort potentiel → 8-10
+- Ville moyenne, bon bassin d'emploi → 6-7
+- Zone péri-urbaine, demande modérée → 4-5
+- Zone rurale calme, marché peu liquide → 3-4
+- Zone sinistrée ou très isolée → 0-2
+
+SCORE GLOBAL = moyenne arithmétique exacte des 4 scores, arrondie au 0.5 le plus proche.
+Exemple : (6+7+5+6)/4 = 6.0 → 6.0
+
+VERDICT (strict) :
+- Score ≥ 7.0 → ACHETER
+- Score 5.0 à 6.5 → NÉGOCIER
+- Score < 5.0 → FUIR
 
 ---
 
