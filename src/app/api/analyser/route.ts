@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { analyserAnnonce } from '@/lib/claude'
 import { supabaseAdmin } from '@/lib/supabase'
-import { createBrowserClient } from '@supabase/ssr'
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,35 +11,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Texte de l\'annonce manquant' }, { status: 400 })
     }
 
-    // Récupérer l'user connecté depuis le cookie
-    const authHeader = request.headers.get('authorization')
-    const userId = authHeader ? authHeader.replace('Bearer ', '') : null
-
     const analyse = await analyserAnnonce({
       texte, dpe, ges, prix, surface, ville,
       typeBien, profilAcheteur, assainissement, anneeConstruction,
       photos: photos || []
     })
 
+    const insertData = {
+      url_annonce: url || null,
+      ville: ville || null,
+      type_bien: typeBien || null,
+      prix: prix ? parseInt(prix) : null,
+      surface: surface ? parseInt(surface) : null,
+      score_global: analyse.scores?.global || null,
+      decision: analyse.verdict?.decision || null,
+      verdict_resume: analyse.verdict?.resume || null,
+      rapport_complet: analyse,
+      statut: 'complete'
+    }
+
+    console.log('💾 Sauvegarde Supabase...', JSON.stringify(insertData).slice(0, 200))
+
     const { data: saved, error } = await supabaseAdmin
       .from('analyses')
-      .insert({
-        user_id: userId,
-        url_annonce: url || null,
-        ville: ville || null,
-        type_bien: typeBien || null,
-        prix: prix ? parseInt(prix) : null,
-        surface: surface ? parseInt(surface) : null,
-        score_global: analyse.scores?.global,
-        decision: analyse.verdict?.decision,
-        verdict_resume: analyse.verdict?.resume,
-        rapport_complet: analyse,
-        statut: 'complete'
-      })
+      .insert(insertData)
       .select()
       .single()
 
-    if (error) console.error('Supabase error:', error)
+    if (error) {
+      console.error('❌ Supabase error:', JSON.stringify(error))
+    } else {
+      console.log('✅ Sauvegardé ID:', saved?.id)
+    }
 
     return NextResponse.json({
       success: true,
