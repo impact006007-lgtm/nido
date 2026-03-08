@@ -17,14 +17,15 @@ export default function Dashboard() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) { window.location.replace('/auth'); return }
-      chargerAnalyses()
+      chargerAnalyses(session.user.id)
     })
   }, [])
 
-  async function chargerAnalyses() {
+  async function chargerAnalyses(userId: string) {
     const { data } = await supabase
       .from('analyses')
       .select('id, created_at, ville, type_bien, prix, surface, score_global, decision, verdict_resume, rapport_complet')
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(50)
     setAnalyses(data || [])
