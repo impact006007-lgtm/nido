@@ -11,6 +11,7 @@ const supabase = createBrowserClient(
 
 export default function Dashboard() {
   const [analyses, setAnalyses] = useState<any[]>([])
+  const [profils, setProfils] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<any>(null)
 
@@ -18,6 +19,7 @@ export default function Dashboard() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) { window.location.replace('/auth'); return }
       chargerAnalyses(session.user.id)
+      supabase.from('profils').select('*').then(({ data }) => setProfils(data || []))
     })
   }, [])
 
@@ -100,12 +102,41 @@ export default function Dashboard() {
           <div className="logo">NID<em>O</em></div>
           <div className="nav">
             <a className="btn-primary" href="/">+ Nouvelle analyse</a>
+            <a className="btn-nav" href="/profil">Mes profils</a>
             <button className="btn-nav" onClick={async () => { await supabase.auth.signOut(); window.location.replace('/auth') }}>Déconnexion</button>
           </div>
         </div>
 
         <div className="page-title">Mes analyses</div>
         <div className="page-sub">{analyses.length} analyse{analyses.length > 1 ? 's' : ''} enregistrée{analyses.length > 1 ? 's' : ''}</div>
+
+        {/* Bannière gamification profil */}
+        {profils.length === 0 ? (
+          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '16px 20px', marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: 500, color: '#92400e', marginBottom: '3px' }}>⭐ Vos scores sont génériques</div>
+              <div style={{ fontSize: '12px', color: '#a07840' }}>Créez votre profil pour des scores personnalisés selon votre projet</div>
+            </div>
+            <a href="/profil" style={{ background: '#8b6914', color: '#fff', borderRadius: '8px', padding: '9px 18px', fontSize: '12px', fontWeight: 500, textDecoration: 'none', whiteSpace: 'nowrap' }}>Créer mon profil →</a>
+          </div>
+        ) : profils.some(p => {
+          const fields = ['projet', 'zone', 'priorite', 'budget_max', 'pieces_min']
+          return fields.filter(f => p[f] !== null && p[f] !== '' && p[f] !== undefined).length < 5
+        }) ? (
+          <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '12px', padding: '16px 20px', marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: 500, color: '#0369a1', marginBottom: '3px' }}>◑ Profil incomplet — scores semi-personnalisés</div>
+              <div style={{ fontSize: '12px', color: '#0284c7' }}>Complétez votre profil pour des scores ultra-précis</div>
+            </div>
+            <a href="/profil" style={{ background: '#0369a1', color: '#fff', borderRadius: '8px', padding: '9px 18px', fontSize: '12px', fontWeight: 500, textDecoration: 'none', whiteSpace: 'nowrap' }}>Compléter →</a>
+          </div>
+        ) : (
+          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '14px 20px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '16px' }}>✓</span>
+            <div style={{ fontSize: '13px', color: '#16a34a', fontWeight: 500 }}>Profil complet — vos scores sont ultra-personnalisés</div>
+            <a href="/profil" style={{ marginLeft: 'auto', fontSize: '11px', color: '#16a34a', textDecoration: 'underline' }}>Gérer mes profils</a>
+          </div>
+        )}
 
         {loading ? (
           <div className="loading">Chargement…</div>

@@ -14,10 +14,19 @@ interface AnnonceInput {
   assainissement?: string
   anneeConstruction?: string
   photos: string[]
+  profil?: {
+    nom?: string
+    projet?: string
+    zone?: string
+    priorite?: string
+    budget_max?: number | null
+    pieces_min?: number | null
+    jardin?: boolean
+  } | null
 }
 
 export async function analyserAnnonce(annonce: AnnonceInput) {
-  const { texte, dpe, ges, prix, surface, ville, typeBien, profilAcheteur, assainissement, anneeConstruction, photos } = annonce
+  const { texte, dpe, ges, prix, surface, ville, typeBien, profilAcheteur, assainissement, anneeConstruction, photos, profil } = annonce
 
   const imagesContent = photos.slice(0, 16).map(dataUrl => {
     const [header, data] = dataUrl.split(',')
@@ -49,6 +58,21 @@ export async function analyserAnnonce(annonce: AnnonceInput) {
 Date : ${today}
 
 PROFIL DE L'ACHETEUR : ${profilAcheteur || 'non précisé'}
+${profil ? `
+PROFIL PERSONNALISÉ ACTIF — adapte le scoring en conséquence :
+- Projet : ${profil.projet === 'residence_principale' ? 'Résidence principale' : profil.projet === 'investissement' ? 'Investissement locatif' : profil.projet === 'vacances' ? 'Résidence secondaire' : 'Non précisé'}
+- Zone souhaitée : ${profil.zone === 'urbain' ? 'Urbain' : profil.zone === 'peri_urbain' ? 'Péri-urbain' : profil.zone === 'rural' ? 'Rural' : 'Non précisé'}
+- Priorité : ${profil.priorite === 'cle_en_main' ? 'Clé en main (pénalise les biens à rénover)' : profil.priorite === 'a_renover' ? 'À rénover (valorise le potentiel de rénovation)' : 'Peu importe'}
+${profil.budget_max ? `- Budget max : ${profil.budget_max.toLocaleString('fr-FR')} € (pénalise si prix > budget)` : ''}
+${profil.pieces_min ? `- Pièces minimum : ${profil.pieces_min} (pénalise si surface insuffisante)` : ''}
+${profil.jardin ? `- Jardin obligatoire (valorise les biens avec extérieur, pénalise sans jardin)` : ''}
+
+RÈGLES DE SCORING PERSONNALISÉ :
+- Score potentiel : si zone annonce = zone souhaitée → bonus +1. Si incompatible → malus -1.5
+- Score état bâti : si priorité "clé en main" → pénalise -1 pour chaque travaux importants. Si "à rénover" → bonus +1 pour potentiel de rénovation.
+- Score qualité/prix : si prix > budget_max → malus -2. Si prix ≤ budget_max*0.85 → bonus +1.
+- Score global : ajoute une note "Score générique : X/10 — Score avec votre profil : Y/10" dans le verdict.resume
+` : 'Aucun profil personnalisé — scoring générique standard.'}
 TYPE DE BIEN : ${typeBien || 'non précisé'}
 
 DONNÉES DE L'ANNONCE :

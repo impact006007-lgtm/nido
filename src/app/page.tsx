@@ -38,6 +38,8 @@ export default function Home() {
   const [erreur, setErreur] = useState('')
   const [drag, setDrag] = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
+  const [profils, setProfils] = useState<any[]>([])
+  const [profilSelectionne, setProfilSelectionne] = useState<string>('') // id ou ''
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -46,6 +48,13 @@ export default function Home() {
         window.location.replace('/auth')
       } else {
         setAuthChecked(true)
+        // Charger les profils
+        supabase.from('profils').select('*').order('created_at').then(({ data }) => {
+          setProfils(data || [])
+          // Pré-sélectionner le profil par défaut
+          const defaut = data?.find((p: any) => p.est_defaut)
+          if (defaut) setProfilSelectionne(defaut.id)
+        })
       }
     })
   }, [])
@@ -74,6 +83,7 @@ export default function Home() {
       )
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token || ''
+      const profil = profils.find(p => p.id === profilSelectionne) || null
 
       const res = await fetch('/api/analyser', {
         method: 'POST',
@@ -81,7 +91,7 @@ export default function Home() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ ...form, photos: photosBase64 })
+        body: JSON.stringify({ ...form, photos: photosBase64, profil })
       })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
@@ -404,6 +414,35 @@ export default function Home() {
                 <button key={l} className={`dpe-btn ${form.ges === l ? 'sel' : ''}`} onClick={() => set('ges', form.ges === l ? '' : l)}>{l}</button>
               ))}
             </div>
+
+            {/* Sélecteur de profil */}
+            <label className="label">Profil de scoring</label>
+            {profils.length === 0 ? (
+              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 500, color: '#92400e', marginBottom: '2px' }}>⭐ Scores génériques — créez votre profil pour personnaliser</div>
+                  <div style={{ fontSize: '11px', color: '#a07840' }}>Un profil adapte le scoring à votre projet immobilier</div>
+                </div>
+                <a href="/profil" style={{ background: '#8b6914', color: '#fff', border: 'none', borderRadius: '7px', padding: '7px 14px', fontSize: '11px', fontWeight: 500, cursor: 'pointer', textDecoration: 'none', whiteSpace: 'nowrap' }}>Créer un profil →</a>
+              </div>
+            ) : (
+              <div style={{ marginBottom: '16px' }}>
+                <div className="chip-row">
+                  <button className={`chip ${profilSelectionne === '' ? 'sel' : ''}`} onClick={() => setProfilSelectionne('')}>Sans profil</button>
+                  {profils.map(p => (
+                    <button key={p.id} className={`chip ${profilSelectionne === p.id ? 'sel' : ''}`} onClick={() => setProfilSelectionne(p.id)}>
+                      {p.est_defaut ? '⭐ ' : ''}{p.nom}
+                    </button>
+                  ))}
+                  <a href="/profil" style={{ padding: '7px 14px', borderRadius: '100px', border: '1.5px dashed #d9d2c7', fontSize: '12px', color: '#a09480', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>+ Nouveau profil</a>
+                </div>
+                {profilSelectionne === '' && (
+                  <div style={{ marginTop: '8px', fontSize: '11px', color: '#a07840', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '7px', padding: '7px 12px' }}>
+                    ⚠ Sans profil, le score est générique — sélectionnez un profil pour un score personnalisé
+                  </div>
+                )}
+              </div>
+            )}
 
             <label className="label">URL de l'annonce (optionnel)</label>
             <input className="input" type="url" placeholder="https://www.seloger.com/..." value={form.url} onChange={e => set('url', e.target.value)} />

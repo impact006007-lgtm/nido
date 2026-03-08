@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { texte, url, dpe, ges, prix, surface, ville, typeBien, profilAcheteur, assainissement, anneeConstruction, photos } = body
+    const { texte, url, dpe, ges, prix, surface, ville, typeBien, profilAcheteur, assainissement, anneeConstruction, photos, profil } = body
 
     if (!texte?.trim()) {
       return NextResponse.json({ error: 'Texte de l\'annonce manquant' }, { status: 400 })
@@ -25,7 +25,8 @@ export async function POST(request: NextRequest) {
     const analyse = await analyserAnnonce({
       texte, dpe, ges, prix, surface, ville,
       typeBien, profilAcheteur, assainissement, anneeConstruction,
-      photos: photos || []
+      photos: photos || [],
+      profil: profil || null
     })
 
     const { data: saved, error } = await supabaseAdmin
