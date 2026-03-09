@@ -22,11 +22,17 @@ export async function POST(request: NextRequest) {
     // Récupérer l'analyse originale
     const { data: analyse } = await supabaseAdmin
       .from('analyses')
-      .select('rapport_complet, ville, type_bien')
+      .select('rapport_complet, ville, type_bien, nb_analyses_docs')
       .eq('id', analyse_id)
       .single()
 
     if (!analyse) return NextResponse.json({ error: 'Analyse introuvable' }, { status: 404 })
+
+    // Garde-fou : max 3 analyses de docs par bien
+    const nbActuel = analyse.nb_analyses_docs || 0
+    if (nbActuel >= 3) {
+      return NextResponse.json({ error: 'Limite de 3 analyses par bien atteinte' }, { status: 429 })
+    }
 
     const rapportOriginal = analyse.rapport_complet
 
@@ -51,6 +57,8 @@ Analyse ces documents et génère :
 2. Les points qui CONFIRMENT ou CONTREDISENT l'analyse initiale
 3. Un score révisé (peut augmenter ou baisser selon ce que révèlent les docs)
 4. Une recommandation finale mise à jour
+
+IMPORTANT : Texte brut uniquement dans tous les champs string. N'utilise JAMAIS de markdown (**gras**, *italique*).
 
 Réponds UNIQUEMENT en JSON valide :
 {
@@ -113,11 +121,13 @@ Réponds UNIQUEMENT en JSON valide :
         score_global: analyseComplementaire.score_revise,
         decision: analyseComplementaire.verdict_revise?.decision,
         verdict_resume: analyseComplementaire.verdict_revise?.resume,
-        analyse_complementaire: analyseComplementaire
+        analyse_complementaire: analyseComplementaire,
+        has_docs: true,
+        nb_analyses_docs: nbActuel + 1
       })
       .eq('id', analyse_id)
 
-    return NextResponse.json({ success: true, analyseComplementaire })
+    return NextResponse.json({ success: true, analyseComplementaire, nb_analyses_docs: nbActuel + 1 })
 
   } catch (error: any) {
     console.error('Erreur analyse docs:', error)

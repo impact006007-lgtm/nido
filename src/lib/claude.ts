@@ -143,6 +143,7 @@ ANALYSE VISUELLE PAR PIÈCE :
 - etat : "bon" = rien à faire, "correct" = entretien mineur, "a_renover" = travaux nécessaires
 
 Génère une analyse SYNTHÉTIQUE et DIRECTE. Chaque point = 1-2 phrases max.
+IMPORTANT : N'utilise JAMAIS de markdown (**gras**, *italique*, #titres). Texte brut uniquement.
 Pas de remplissage, pas de langue de bois.
 
 Réponds UNIQUEMENT en JSON valide avec exactement cette structure :

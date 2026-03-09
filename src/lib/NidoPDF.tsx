@@ -361,7 +361,9 @@ export async function genererPDF(data: any, ville?: string, typeBien?: string): 
 function NidoPDFApresVisiteDocument({ data, ac, ville, typeBien }: { data: any, ac: any, ville?: string, typeBien?: string }) {
   const fmt = (n: number) => n ? n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : '—'
   const date = new Date().toLocaleDateString('fr-FR')
+  // ac = analyse_complementaire, data = rapport_complet initial
   const delta = ac?.delta_score || 0
+  const clean = (text: string) => text?.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1') || ''
 
   return (
     <Document>
@@ -394,7 +396,7 @@ function NidoPDFApresVisiteDocument({ data, ac, ville, typeBien }: { data: any, 
             </View>
             {ac?.verdict_revise?.resume && (
               <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 12, lineHeight: 1.6, borderTop: '1pt solid rgba(255,255,255,0.1)', paddingTop: 10 }}>
-                {ac.verdict_revise.resume}
+                {clean(ac.verdict_revise.resume)}
               </Text>
             )}
           </View>
@@ -403,7 +405,7 @@ function NidoPDFApresVisiteDocument({ data, ac, ville, typeBien }: { data: any, 
           {ac?.synthese && (
             <View style={[styles.sectionCard, { marginBottom: 12 }]} wrap={false}>
               <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>Synthèse</Text>
-              <Text style={{ fontSize: 10, color: '#4a4035', lineHeight: 1.7, fontStyle: 'italic' }}>{ac.synthese}</Text>
+              <Text style={{ fontSize: 10, color: '#4a4035', lineHeight: 1.7, fontStyle: 'italic' }}>{clean(ac.synthese)}</Text>
             </View>
           )}
 
@@ -417,7 +419,7 @@ function NidoPDFApresVisiteDocument({ data, ac, ville, typeBien }: { data: any, 
                 <View key={i} style={{ flexDirection: 'row', gap: 10, paddingVertical: 5, borderBottom: i < ac.nouvelles_alertes.length - 1 ? '0.5pt solid #f8f5f0' : 'none' }}>
                   <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: a.niveau === 'rouge' ? '#dc2626' : a.niveau === 'orange' ? '#f97316' : '#16a34a', marginTop: 3 }} />
                   <Text style={{ fontSize: 8, color: '#a09480', textTransform: 'uppercase', letterSpacing: 0.5, width: 80 }}>{a.categorie}</Text>
-                  <Text style={{ fontSize: 9, color: '#2d2a24', flex: 1, lineHeight: 1.5 }}>{a.observation}</Text>
+                  <Text style={{ fontSize: 9, color: '#2d2a24', flex: 1, lineHeight: 1.5 }}>{clean(a.observation)}</Text>
                 </View>
               ))}
             </View>
@@ -430,14 +432,14 @@ function NidoPDFApresVisiteDocument({ data, ac, ville, typeBien }: { data: any, 
                 <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 10, color: '#1a1814' }}>{obs.nom}</Text>
                 <Text style={{ fontSize: 8, color: obs.impact === 'positif' ? '#16a34a' : obs.impact === 'négatif' ? '#dc2626' : '#8a7d6b' }}>{obs.impact}</Text>
               </View>
-              <Text style={{ fontSize: 9, color: '#4a4035', lineHeight: 1.6 }}>{obs.points_cles}</Text>
+              <Text style={{ fontSize: 9, color: '#4a4035', lineHeight: 1.6 }}>{clean(obs.points_cles)}</Text>
             </View>
           ))}
 
           {/* Rappel analyse initiale */}
           <View style={[styles.sectionCard, { backgroundColor: '#f5f2ed', marginTop: 8 }]} wrap={false}>
             <Text style={{ fontSize: 8, color: '#a09480', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Rappel — Analyse initiale</Text>
-            <Text style={{ fontSize: 10, color: '#4a4035', lineHeight: 1.6 }}>{data?.verdict?.resume}</Text>
+            <Text style={{ fontSize: 10, color: '#4a4035', lineHeight: 1.6 }}>{clean(data?.verdict?.resume || '')}</Text>
           </View>
         </View>
 

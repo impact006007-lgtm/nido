@@ -369,7 +369,7 @@ export default function Dashboard() {
                 setShowHistorique={setShowHistorique}
                 onPDF={async () => {
                   const { genererPDFApresVisite } = await import('@/lib/NidoPDF')
-                  await genererPDFApresVisite(selected.analyse_complementaire, selected.rapport_complet, selected.ville, selected.type_bien)
+                  await genererPDFApresVisite(selected.rapport_complet, selected.analyse_complementaire, selected.ville, selected.type_bien)
                 }}
               />
             )}
@@ -545,6 +545,10 @@ function RapportModal({ data, ville, typeBien, onPDF }: { data: any, ville: stri
 
 function RapportApresVisite({ data, scoreInitial, historique, showHistorique, setShowHistorique, onPDF, onChargerHistorique }: any) {
   if (!data) return <div style={{ textAlign: 'center', padding: '40px', color: '#a09480' }}>Aucune analyse post-visite disponible</div>
+
+  // Nettoyer le markdown ** et autres
+  const clean = (text: string) => text?.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1') || ''
+
   const delta = data.delta_score || 0
   return (
     <div>
@@ -567,14 +571,16 @@ function RapportApresVisite({ data, scoreInitial, historique, showHistorique, se
         </div>
         {data.verdict_revise?.resume && (
           <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.65)', lineHeight: 1.7, marginTop: '14px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '14px' }}>
-            {data.verdict_revise.resume}
+            {clean(data.verdict_revise.resume)}
           </div>
         )}
       </div>
 
-      {/* Synthèse */}
-      <div style={{ fontSize: '13px', color: '#2d2a24', lineHeight: 1.7, marginBottom: '12px', fontStyle: 'italic', background: '#faf8f5', border: '1px solid #e8e2d9', borderRadius: '10px', padding: '14px' }}>
-        {data.synthese}
+      {/* Synthèse — paragraphes séparés */}
+      <div style={{ background: '#faf8f5', border: '1px solid #e8e2d9', borderRadius: '10px', padding: '14px', marginBottom: '12px' }}>
+        {clean(data.synthese || '').split(/\n+/).filter(Boolean).map((para: string, i: number) => (
+          <p key={i} style={{ fontSize: '13px', color: '#2d2a24', lineHeight: 1.7, margin: i > 0 ? '8px 0 0' : '0', fontStyle: 'italic' }}>{para}</p>
+        ))}
       </div>
 
       {/* Nouvelles alertes */}
@@ -588,7 +594,7 @@ function RapportApresVisite({ data, scoreInitial, historique, showHistorique, se
               <div key={i} style={{ display: 'flex', gap: '10px', padding: '7px 0', borderBottom: i < data.nouvelles_alertes.length - 1 ? '1px solid #f8f5f0' : 'none' }}>
                 <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: a.niveau === 'rouge' ? '#dc2626' : a.niveau === 'orange' ? '#f97316' : '#16a34a', marginTop: '5px', flexShrink: 0 }} />
                 <div style={{ fontSize: '11px', color: '#a09480', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '90px', flexShrink: 0 }}>{a.categorie}</div>
-                <div style={{ fontSize: '12px', color: '#2d2a24', lineHeight: 1.5 }}>{a.observation}</div>
+                <div style={{ fontSize: '12px', color: '#2d2a24', lineHeight: 1.5 }}>{clean(a.observation)}</div>
               </div>
             ))}
           </div>
@@ -602,7 +608,7 @@ function RapportApresVisite({ data, scoreInitial, historique, showHistorique, se
             <div style={{ fontSize: '12px', fontWeight: 600, color: '#1a1814' }}>{obs.nom}</div>
             <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: obs.impact === 'positif' ? '#f0fdf4' : obs.impact === 'négatif' ? '#fef2f2' : '#fafafa', color: obs.impact === 'positif' ? '#16a34a' : obs.impact === 'négatif' ? '#dc2626' : '#8a7d6b', border: `1px solid ${obs.impact === 'positif' ? '#bbf7d0' : obs.impact === 'négatif' ? '#fecaca' : '#e8e2d9'}` }}>{obs.impact}</span>
           </div>
-          <div style={{ fontSize: '12px', color: '#4a4035', lineHeight: 1.6 }}>{obs.points_cles}</div>
+          <div style={{ fontSize: '12px', color: '#4a4035', lineHeight: 1.6 }}>{clean(obs.points_cles)}</div>
         </div>
       ))}
 
