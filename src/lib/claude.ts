@@ -133,6 +133,15 @@ VERDICT (strict) :
 
 ---
 
+ANALYSE VISUELLE PAR PIÈCE :
+- Détecte automatiquement chaque pièce/zone visible dans les photos
+- Crée une entrée par pièce distincte dans analyse_photos
+- Si plusieurs photos de la même pièce, regroupe-les en une seule entrée
+- Pièces typiques : Cuisine, Salon, Séjour, Chambre(s), Salle de bain, WC, Façade, Extérieur, Terrasse, Jardin, Garage, Sous-sol, Combles, Entrée, Couloir
+- Nomme précisément : "Chambre 1", "Chambre 2" si plusieurs chambres
+- Si une pièce n'est pas visible sur les photos, ne l'inclus pas
+- etat : "bon" = rien à faire, "correct" = entretien mineur, "a_renover" = travaux nécessaires
+
 Génère une analyse SYNTHÉTIQUE et DIRECTE. Chaque point = 1-2 phrases max.
 Pas de remplissage, pas de langue de bois.
 
@@ -159,9 +168,14 @@ Réponds UNIQUEMENT en JSON valide avec exactement cette structure :
       "observation": string
     }
   ],
-  "analyse_photos": {
-    "zone": "observation 1-2 phrases"
-  },
+  "analyse_photos": [
+    {
+      "piece": "Nom de la pièce détectée (ex: Cuisine, Salon, Chambre 1, Salle de bain, Façade, Terrasse, Sous-sol, Garage...)",
+      "etat": "bon" | "correct" | "a_renover",
+      "observation": "Description factuelle 1-2 phrases — ce qui est visible, points positifs et négatifs",
+      "points_attention": ["point 1", "point 2"]
+    }
+  ],
   "budget": {
     "prix_demande": number,
     "frais_notaire": number,

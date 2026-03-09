@@ -250,19 +250,40 @@ export function NidoPDFDocument({ data, ville, typeBien }: { data: any, ville?: 
           )}
 
           {/* Analyse photos */}
-          {data.analyse_photos && typeof data.analyse_photos === 'object' && (
-            <View style={styles.sectionCard} wrap={false}>
+          {data.analyse_photos && (
+            <View style={styles.sectionCard} wrap={true} minPresenceAhead={40}>
               <View style={styles.sectionHead}>
                 <Text style={[styles.sectionTitle, { color: '#475569' }]}>Analyse visuelle</Text>
               </View>
               <View style={styles.sectionBody}>
                 <View style={styles.photoGrid}>
-                  {Object.entries(data.analyse_photos).map(([zone, texte]) => (
-                    <View key={zone} style={styles.photoZone}>
-                      <Text style={styles.photoZoneTitle}>{zone}</Text>
-                      <Text style={styles.photoZoneText}>{String(texte)}</Text>
-                    </View>
-                  ))}
+                  {Array.isArray(data.analyse_photos) ? (
+                    data.analyse_photos.map((piece: any, i: number) => (
+                      <View key={i} style={[styles.photoZone, { marginBottom: 8 }]} wrap={false}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                          <Text style={styles.photoZoneTitle}>{piece.piece}</Text>
+                          <Text style={{ fontSize: 7, color: piece.etat === 'bon' ? '#16a34a' : piece.etat === 'a_renover' ? '#dc2626' : '#d97706', fontFamily: 'Helvetica-Bold' }}>
+                            {piece.etat === 'bon' ? '✓ Bon état' : piece.etat === 'a_renover' ? '⚠ À rénover' : '◑ Correct'}
+                          </Text>
+                        </View>
+                        <Text style={styles.photoZoneText}>{piece.observation}</Text>
+                        {piece.points_attention?.length > 0 && (
+                          <View style={{ marginTop: 3 }}>
+                            {piece.points_attention.map((p: string, j: number) => (
+                              <Text key={j} style={{ fontSize: 7, color: '#8a7d6b', marginBottom: 1 }}>· {p}</Text>
+                            ))}
+                          </View>
+                        )}
+                      </View>
+                    ))
+                  ) : (
+                    Object.entries(data.analyse_photos).map(([zone, texte]) => (
+                      <View key={zone} style={styles.photoZone}>
+                        <Text style={styles.photoZoneTitle}>{zone}</Text>
+                        <Text style={styles.photoZoneText}>{String(texte)}</Text>
+                      </View>
+                    ))
+                  )}
                 </View>
               </View>
             </View>

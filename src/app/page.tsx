@@ -69,6 +69,31 @@ export default function Home() {
 
   async function analyser() {
     if (!form.texte.trim()) return
+
+    // Validation prix
+    if (form.prix) {
+      const prix = parseInt(form.prix)
+      if (prix < 10000) {
+        const ok = window.confirm(`⚠️ Prix saisi : ${prix.toLocaleString('fr-FR')} €\n\nCe montant semble très bas pour un bien immobilier.\nAvez-vous peut-être saisi ${(prix * 1000).toLocaleString('fr-FR')} € ?\n\nCliquez OK pour continuer quand même, ou Annuler pour corriger.`)
+        if (!ok) return
+      } else if (prix > 5000000) {
+        const ok = window.confirm(`⚠️ Prix saisi : ${prix.toLocaleString('fr-FR')} €\n\nCe montant semble très élevé.\n\nCliquez OK pour continuer quand même, ou Annuler pour corriger.`)
+        if (!ok) return
+      }
+    }
+
+    // Validation surface
+    if (form.surface) {
+      const surface = parseInt(form.surface)
+      if (surface < 9) {
+        const ok = window.confirm(`⚠️ Surface saisie : ${surface} m²\n\nCette surface semble très petite.\n\nCliquez OK pour continuer quand même, ou Annuler pour corriger.`)
+        if (!ok) return
+      } else if (surface > 1000) {
+        const ok = window.confirm(`⚠️ Surface saisie : ${surface} m²\n\nCette surface semble très grande.\n\nCliquez OK pour continuer quand même, ou Annuler pour corriger.`)
+        if (!ok) return
+      }
+    }
+
     setLoading(true)
     setErreur('')
     setEtape('analyse')
@@ -590,7 +615,7 @@ function Rapport({ data, form, onReset }: { data: any, form: FormData, onReset: 
       )}
 
       {/* ANALYSE PHOTOS */}
-      {data.analyse_photos && typeof data.analyse_photos === 'object' && (
+      {data.analyse_photos && (
         <div className="r-card">
           <div className="r-card-head">
             <div className="r-icon ardoise">🔍</div>
@@ -598,12 +623,39 @@ function Rapport({ data, form, onReset }: { data: any, form: FormData, onReset: 
           </div>
           <div className="r-body">
             <div className="photo-grid">
-              {Object.entries(data.analyse_photos).map(([zone, texte]) => (
-                <div key={zone} className="photo-zone">
-                  <div className="photo-zone-title">{zoneIcon(zone)} {zone}</div>
-                  <div className="photo-zone-text">{String(texte)}</div>
-                </div>
-              ))}
+              {Array.isArray(data.analyse_photos) ? (
+                // Nouveau format — une card par pièce
+                data.analyse_photos.map((piece: any, i: number) => (
+                  <div key={i} className="photo-zone">
+                    <div className="photo-zone-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>{zoneIcon(piece.piece)} {piece.piece}</span>
+                      <span style={{
+                        fontSize: '9px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
+                        padding: '2px 8px', borderRadius: '4px',
+                        background: piece.etat === 'bon' ? '#f0fdf4' : piece.etat === 'a_renover' ? '#fef2f2' : '#fffbeb',
+                        color: piece.etat === 'bon' ? '#16a34a' : piece.etat === 'a_renover' ? '#dc2626' : '#92400e',
+                        border: `1px solid ${piece.etat === 'bon' ? '#bbf7d0' : piece.etat === 'a_renover' ? '#fecaca' : '#fde68a'}`
+                      }}>
+                        {piece.etat === 'bon' ? '✓ Bon état' : piece.etat === 'a_renover' ? '⚠ À rénover' : '◑ Correct'}
+                      </span>
+                    </div>
+                    <div className="photo-zone-text">{piece.observation}</div>
+                    {piece.points_attention?.length > 0 && (
+                      <ul style={{ margin: '6px 0 0', padding: '0 0 0 16px', fontSize: '11px', color: '#8a7d6b', lineHeight: 1.6 }}>
+                        {piece.points_attention.map((p: string, j: number) => <li key={j}>{p}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                ))
+              ) : (
+                // Ancien format — objet clé/valeur
+                Object.entries(data.analyse_photos).map(([zone, texte]) => (
+                  <div key={zone} className="photo-zone">
+                    <div className="photo-zone-title">{zoneIcon(zone)} {zone}</div>
+                    <div className="photo-zone-text">{String(texte)}</div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
