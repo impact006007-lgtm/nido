@@ -57,7 +57,19 @@ export default function Dashboard() {
   }
 
   async function basculerStatut(id: string, statut: 'avant_visite' | 'apres_visite') {
-    await supabase.from('analyses').update({ statut_visite: statut }).eq('id', id)
+    const { error } = await supabase.from('analyses').update({ statut_visite: statut }).eq('id', id)
+    if (error) {
+      console.error('Erreur update statut_visite:', error)
+      // Fallback : update via session directe
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        await fetch('/api/update-statut', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({ id, statut_visite: statut })
+        })
+      }
+    }
     setAnalyses(prev => prev.map(a => a.id === id ? { ...a, statut_visite: statut } : a))
   }
 
@@ -307,7 +319,7 @@ export default function Dashboard() {
                           {a.decision === 'ACHETER' ? '✓ ' : a.decision === 'FUIR' ? '✕ ' : '~ '}{a.decision}
                         </span>
                         <span className="score-badge" style={{ color: scoreColor(a.score_global) }}>
-                          {a.score_global}<span className="score-denom">/10</span>
+                          {a.rapport_complet?.scores?.global_avec_profil || a.score_global}<span className="score-denom">/10</span>
                         </span>
                       </div>
                       <div className="card-body">
@@ -500,7 +512,17 @@ function RapportModal({ data, ville, typeBien, onPDF }: { data: any, ville: stri
             </div>
             {v?.prix_recommande && <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '40px', fontWeight: 700, color: '#fff', lineHeight: 1 }}>{v.prix_recommande.toLocaleString('fr-FR')} €</div>}
           </div>
-          {data.scores && <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '48px', fontWeight: 700, color: '#fff', lineHeight: 1 }}>{data.scores.global}<span style={{ fontSize: '16px', color: '#8b6914' }}>/10</span></div>}
+          {data.scores && (
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '48px', fontWeight: 700, color: '#fff', lineHeight: 1 }}>
+              {data.scores.global_avec_profil || data.scores.global}
+              <span style={{ fontSize: '16px', color: '#8b6914' }}>/10</span>
+              {data.scores.global_avec_profil && data.scores.global_avec_profil !== data.scores.global && (
+                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', display: 'block', marginTop: '2px' }}>
+                  {data.scores.global}/10 sans profil
+                </span>
+              )}
+            </div>
+          )}
         </div>
         {v?.resume && <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.65)', lineHeight: 1.7, marginTop: '14px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '14px' }}>{v.resume}</div>}
       </div>

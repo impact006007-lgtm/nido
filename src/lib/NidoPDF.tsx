@@ -359,94 +359,136 @@ export async function genererPDF(data: any, ville?: string, typeBien?: string): 
 
 // Document PDF après visite
 function NidoPDFApresVisiteDocument({ data, ac, ville, typeBien }: { data: any, ac: any, ville?: string, typeBien?: string }) {
-  const fmt = (n: number) => n ? n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : '—'
   const date = new Date().toLocaleDateString('fr-FR')
-  // ac = analyse_complementaire, data = rapport_complet initial
   const delta = ac?.delta_score || 0
-  const clean = (text: string) => text?.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1') || ''
+  const clean = (text: string) => (text || '').replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1')
+  const decision = ac?.verdict_revise?.decision || 'NÉGOCIER'
+  const decisionBg = decision === 'ACHETER' ? '#052e16' : decision === 'FUIR' ? '#1f0505' : '#1c1003'
+  const decisionColor = decision === 'ACHETER' ? '#4ade80' : decision === 'FUIR' ? '#f87171' : '#fbbf24'
+  const scoreInitial = data?.scores?.global_avec_profil || data?.scores?.global
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* Spacer pages suivantes */}
-        <View style={{ height: 24, backgroundColor: '#f5f2ed' }} fixed />
+        <View style={{ height: 20, backgroundColor: '#f5f2ed' }} fixed />
 
         {/* Header */}
-        <View style={{ backgroundColor: '#1a1814', padding: 0 }}>
-          <View style={{ paddingHorizontal: 40, paddingTop: 32, paddingBottom: 28 }}>
-            <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 28, color: '#ffffff', letterSpacing: 2, marginBottom: 4 }}>NIDO</Text>
-            <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5, textTransform: 'uppercase' }}>ANALYSE APRÈS VISITE · {date}</Text>
-            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 8 }}>{ville || ''}{typeBien ? ` · ${typeBien}` : ''}</Text>
+        <View style={styles.header}>
+          <Text style={styles.logo}>NIDO</Text>
+          <View style={styles.headerRight}>
+            <Text style={styles.headerDate}>ANALYSE APRES VISITE · {date}</Text>
+            <Text style={styles.headerAdresse}>{ville || ''}{typeBien ? ` · ${typeBien}` : ''}</Text>
           </View>
         </View>
 
-        <View style={styles.body}>
-          {/* Score révisé */}
-          <View style={[styles.sectionCard, { backgroundColor: delta >= 0 ? '#052e16' : '#1f0505', marginBottom: 12 }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <View>
-                <Text style={{ fontSize: 8, color: delta >= 0 ? '#4ade80' : '#f87171', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 6 }}>{ac?.verdict_revise?.decision}</Text>
-                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 40, color: '#ffffff' }}>
-                  {ac?.score_revise}<Text style={{ fontSize: 14, color: '#8b6914' }}>/10</Text>
-                </Text>
-                <Text style={{ fontSize: 11, color: delta >= 0 ? '#4ade80' : '#f87171', marginTop: 4 }}>
-                  {delta >= 0 ? '▲' : '▼'} {Math.abs(delta)} point{Math.abs(delta) > 1 ? 's' : ''} vs score initial ({data?.scores?.global}/10)
-                </Text>
-              </View>
-            </View>
-            {ac?.verdict_revise?.resume && (
-              <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 12, lineHeight: 1.6, borderTop: '1pt solid rgba(255,255,255,0.1)', paddingTop: 10 }}>
-                {clean(ac.verdict_revise.resume)}
+        {/* Verdict banner */}
+        <View style={[styles.verdictBanner, { backgroundColor: decisionBg, paddingVertical: 24 }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.verdictDecision, { color: decisionColor }]}>{decision}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 12 }}>
+              <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 40, color: '#ffffff', lineHeight: 1 }}>
+                {ac?.score_revise}<Text style={{ fontSize: 14, color: '#8b6914' }}>/10</Text>
               </Text>
-            )}
+              <Text style={{ fontSize: 10, color: delta >= 0 ? '#4ade80' : '#f87171', fontFamily: 'Helvetica-Bold' }}>
+                {delta >= 0 ? '+' : ''}{delta} pts vs {scoreInitial}/10 initial
+              </Text>
+            </View>
           </View>
+          {ac?.verdict_revise?.resume && (
+            <Text style={[styles.verdictResume, { color: 'rgba(255,255,255,0.65)', maxWidth: 280 }]}>
+              {clean(ac.verdict_revise.resume)}
+            </Text>
+          )}
+        </View>
+
+        <View style={styles.body}>
 
           {/* Synthèse */}
           {ac?.synthese && (
-            <View style={[styles.sectionCard, { marginBottom: 12 }]} wrap={false}>
-              <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>Synthèse</Text>
-              <Text style={{ fontSize: 10, color: '#4a4035', lineHeight: 1.7, fontStyle: 'italic' }}>{clean(ac.synthese)}</Text>
+            <View style={[styles.sectionCard, { marginBottom: 10 }]} wrap={false}>
+              <View style={styles.sectionHead}>
+                <Text style={[styles.sectionTitle, { color: '#475569' }]}>Synthese</Text>
+              </View>
+              <View style={styles.sectionBody}>
+                <Text style={{ fontSize: 9, color: '#4a4035', lineHeight: 1.7, fontStyle: 'italic' }}>{clean(ac.synthese)}</Text>
+              </View>
             </View>
           )}
 
           {/* Nouvelles alertes */}
           {ac?.nouvelles_alertes?.length > 0 && (
-            <View style={[styles.sectionCard, { marginBottom: 12 }]} wrap={false}>
+            <View style={[styles.sectionCard, { marginBottom: 10 }]} wrap={false}>
               <View style={styles.sectionHead}>
                 <Text style={[styles.sectionTitle, { color: '#dc2626' }]}>Nouvelles alertes — diagnostics</Text>
               </View>
-              {ac.nouvelles_alertes.map((a: any, i: number) => (
-                <View key={i} style={{ flexDirection: 'row', gap: 10, paddingVertical: 5, borderBottom: i < ac.nouvelles_alertes.length - 1 ? '0.5pt solid #f8f5f0' : 'none' }}>
-                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: a.niveau === 'rouge' ? '#dc2626' : a.niveau === 'orange' ? '#f97316' : '#16a34a', marginTop: 3 }} />
-                  <Text style={{ fontSize: 8, color: '#a09480', textTransform: 'uppercase', letterSpacing: 0.5, width: 80 }}>{a.categorie}</Text>
-                  <Text style={{ fontSize: 9, color: '#2d2a24', flex: 1, lineHeight: 1.5 }}>{clean(a.observation)}</Text>
-                </View>
-              ))}
+              <View style={styles.sectionBody}>
+                {ac.nouvelles_alertes.map((a: any, i: number) => (
+                  <View key={i} style={[styles.alerteItem, { borderBottomWidth: i < ac.nouvelles_alertes.length - 1 ? 1 : 0 }]}>
+                    <View style={[styles.alerteDot, { backgroundColor: dotColor(a.niveau), marginTop: 4 }]} />
+                    <Text style={styles.alerteCat}>{a.categorie}</Text>
+                    <Text style={styles.alerteText}>{clean(a.observation)}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
           )}
 
           {/* Observations par document */}
-          {ac?.observations_docs?.map((obs: any, i: number) => (
-            <View key={i} style={[styles.sectionCard, { marginBottom: 8 }]} wrap={false}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 10, color: '#1a1814' }}>{obs.nom}</Text>
-                <Text style={{ fontSize: 8, color: obs.impact === 'positif' ? '#16a34a' : obs.impact === 'négatif' ? '#dc2626' : '#8a7d6b' }}>{obs.impact}</Text>
+          {ac?.observations_docs?.length > 0 && (
+            <View style={[styles.sectionCard, { marginBottom: 10 }]}>
+              <View style={styles.sectionHead}>
+                <Text style={[styles.sectionTitle, { color: '#475569' }]}>Documents analyses</Text>
               </View>
-              <Text style={{ fontSize: 9, color: '#4a4035', lineHeight: 1.6 }}>{clean(obs.points_cles)}</Text>
+              <View style={styles.sectionBody}>
+                {ac.observations_docs.map((obs: any, i: number) => (
+                  <View key={i} style={{ paddingVertical: 8, borderBottom: i < ac.observations_docs.length - 1 ? '1pt solid #f5f2ed' : 'none' }} wrap={false}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, color: '#1a1814', flex: 1 }}>{obs.nom}</Text>
+                      <View style={{ backgroundColor: obs.impact === 'positif' ? '#f0fdf4' : obs.impact === 'négatif' ? '#fef2f2' : '#fafafa', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, border: `1pt solid ${obs.impact === 'positif' ? '#bbf7d0' : obs.impact === 'négatif' ? '#fecaca' : '#e8e2d9'}` }}>
+                        <Text style={{ fontSize: 7, color: obs.impact === 'positif' ? '#16a34a' : obs.impact === 'négatif' ? '#dc2626' : '#8a7d6b', fontFamily: 'Helvetica-Bold' }}>{obs.impact}</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 8, color: '#4a4035', lineHeight: 1.6 }}>{clean(obs.points_cles)}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
-          ))}
+          )}
 
           {/* Rappel analyse initiale */}
-          <View style={[styles.sectionCard, { backgroundColor: '#f5f2ed', marginTop: 8 }]} wrap={false}>
-            <Text style={{ fontSize: 8, color: '#a09480', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Rappel — Analyse initiale</Text>
-            <Text style={{ fontSize: 10, color: '#4a4035', lineHeight: 1.6 }}>{clean(data?.verdict?.resume || '')}</Text>
+          <View style={[styles.sectionCard, { backgroundColor: '#f5f2ed' }]} wrap={false}>
+            <View style={styles.sectionHead}>
+              <Text style={[styles.sectionTitle, { color: '#a09480' }]}>Rappel — analyse initiale</Text>
+            </View>
+            <View style={styles.sectionBody}>
+              <View style={{ flexDirection: 'row', gap: 16, marginBottom: 8 }}>
+                <View style={styles.scoreBox}>
+                  <Text style={styles.scoreBoxLabel}>Score initial</Text>
+                  <Text style={[styles.scoreBoxVal, { color: scoreColor(scoreInitial || 0) }]}>
+                    {scoreInitial}<Text style={styles.scoreBoxMax}>/10</Text>
+                  </Text>
+                </View>
+                <View style={styles.scoreBox}>
+                  <Text style={styles.scoreBoxLabel}>Score revise</Text>
+                  <Text style={[styles.scoreBoxVal, { color: scoreColor(ac?.score_revise || 0) }]}>
+                    {ac?.score_revise}<Text style={styles.scoreBoxMax}>/10</Text>
+                  </Text>
+                </View>
+                <View style={[styles.scoreBox, { flex: 2 }]}>
+                  <Text style={styles.scoreBoxLabel}>Verdict initial</Text>
+                  <Text style={{ fontSize: 8, color: '#4a4035', lineHeight: 1.5 }}>{clean(data?.verdict?.decision || '')}</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 8, color: '#8a7d6b', lineHeight: 1.6, fontStyle: 'italic' }}>{clean(data?.verdict?.resume || '')}</Text>
+            </View>
           </View>
+
         </View>
 
         {/* Footer */}
         <View style={styles.footer} fixed>
-          <Text style={styles.footerText}>NIDO · Analyse après visite par IA · {date}</Text>
-          <Text style={styles.footerText}>Outil d'aide à la décision — ne remplace pas un diagnostic certifié</Text>
+          <Text style={styles.footerText}>NIDO · Analyse apres visite par IA · {date}</Text>
+          <Text style={styles.footerText}>Outil d'aide a la decision — ne remplace pas un diagnostic certifie</Text>
         </View>
       </Page>
     </Document>

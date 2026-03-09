@@ -73,8 +73,10 @@ RÈGLES DE SCORING PERSONNALISÉ :
 - Score potentiel : si zone annonce = zone souhaitée → bonus +1. Si incompatible → malus -1.5
 - Score état bâti : si priorité "clé en main" → pénalise -1 pour chaque travaux importants. Si "à rénover" → bonus +1 pour potentiel de rénovation.
 - Score qualité/prix : si prix > budget_max → malus -2. Si prix ≤ budget_max*0.85 → bonus +1.
-- Score global : ajoute une note "Score générique : X/10 — Score avec votre profil : Y/10" dans le verdict.resume
-` : 'Aucun profil personnalisé — scoring générique standard.'}
+- scores.global = score générique (sans profil), scores.global_avec_profil = score ajusté avec les bonus/malus profil
+- Le verdict.resume doit mentionner les deux : "Score générique : X/10 — Score avec votre profil : Y/10"
+` : `Aucun profil personnalisé.
+- scores.global = score générique, scores.global_avec_profil = même valeur que global`}
 TYPE DE BIEN : ${typeBien || 'non précisé'}
 
 DONNÉES DE L'ANNONCE :
@@ -157,6 +159,7 @@ Réponds UNIQUEMENT en JSON valide avec exactement cette structure :
   },
   "scores": {
     "global": number,
+    "global_avec_profil": number,
     "etat_bati": number,
     "rapport_qualite_prix": number,
     "potentiel": number,
