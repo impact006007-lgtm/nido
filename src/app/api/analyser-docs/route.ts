@@ -117,14 +117,31 @@ Réponds UNIQUEMENT en JSON valide :
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-5',
-      max_tokens: 2000,
+      max_tokens: 4000,
       temperature: 0.3,
       messages: [{ role: 'user', content: contentBlocks }]
     })
 
     const text = response.content.map((b: any) => b.text || '').join('')
-    const cleanText = text.replace(/```json|```/g, '').trim()
-    const analyseComplementaire = JSON.parse(cleanText)
+
+    // Extraction robuste du JSON — cherche le premier { ... } valide
+    let analyseComplementaire
+    try {
+      const cleanText = text.replace(/```json|```/g, '').trim()
+      // Tenter parse direct
+      analyseComplementaire = JSON.parse(cleanText)
+    } catch {
+      // Extraire le JSON entre le premier { et le dernier }
+      const start = text.indexOf('{')
+      const end = text.lastIndexOf('}')
+      if (start === -1 || end === -1) throw new Error('Aucun JSON trouvé dans la réponse')
+      try {
+        analyseComplementaire = JSON.parse(text.slice(start, end + 1))
+      } catch (e2) {
+        console.error('JSON brut:', text.slice(0, 500))
+        throw new Error('JSON invalide reçu de Claude')
+      }
+    }
 
     // Sauvegarder chaque document en DB
     for (const doc of documents) {
