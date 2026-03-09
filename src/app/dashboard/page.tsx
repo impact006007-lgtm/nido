@@ -14,6 +14,7 @@ export default function Dashboard() {
   const [profils, setProfils] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<any>(null)
+  const [onglet, setOnglet] = useState<'avant' | 'apres'>('avant')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -43,6 +44,11 @@ export default function Dashboard() {
     if (!confirm('Supprimer cette analyse ?')) return
     await supabase.from('analyses').delete().eq('id', id)
     setAnalyses(prev => prev.filter(a => a.id !== id))
+  }
+
+  async function basculerStatut(id: string, statut: 'avant_visite' | 'apres_visite') {
+    await supabase.from('analyses').update({ statut_visite: statut }).eq('id', id)
+    setAnalyses(prev => prev.map(a => a.id === id ? { ...a, statut_visite: statut } : a))
   }
 
   function formatDate(iso: string) {
@@ -93,6 +99,10 @@ export default function Dashboard() {
         .card-btn-pdf:hover { background: #2d2a24; }
         .card-btn-delete { flex: 0 !important; padding: 7px 10px; background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; }
         .card-btn-delete:hover { background: #fee2e2; }
+        .card-btn-visite { background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; font-weight: 500; }
+        .card-btn-visite:hover { background: #dcfce7; }
+        .card-btn-back { flex: 0 !important; padding: 7px 10px; background: #faf8f5; border: 1px solid #e8e2d9; color: #8a7d6b; }
+        .card-btn-back:hover { background: #f0ebe3; }
         .card-btn-pdf:hover { background: #2d2a24; }
         .card-date { font-size: 10px; color: #c4b99a; text-align: right; padding: 0 18px 12px; }
         .loading { text-align: center; padding: 80px; color: #a09480; font-size: 13px; }
@@ -118,6 +128,16 @@ export default function Dashboard() {
 
         <div className="page-title">Mes analyses</div>
         <div className="page-sub">{analyses.length} analyse{analyses.length > 1 ? 's' : ''} enregistrée{analyses.length > 1 ? 's' : ''}</div>
+
+        {/* Onglets */}
+        <div style={{ display: 'flex', gap: '4px', background: '#ede8e0', borderRadius: '10px', padding: '4px', marginBottom: '24px', width: 'fit-content' }}>
+          <button onClick={() => setOnglet('avant')} style={{ padding: '8px 20px', borderRadius: '7px', border: 'none', fontFamily: 'DM Sans, sans-serif', fontSize: '13px', fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s', background: onglet === 'avant' ? '#fff' : 'transparent', color: onglet === 'avant' ? '#1a1814' : '#8a7d6b', boxShadow: onglet === 'avant' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none' }}>
+            🔍 Avant visite <span style={{ fontSize: '11px', color: '#a09480', marginLeft: '4px' }}>{analyses.filter(a => !a.statut_visite || a.statut_visite === 'avant_visite').length}</span>
+          </button>
+          <button onClick={() => setOnglet('apres')} style={{ padding: '8px 20px', borderRadius: '7px', border: 'none', fontFamily: 'DM Sans, sans-serif', fontSize: '13px', fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s', background: onglet === 'apres' ? '#fff' : 'transparent', color: onglet === 'apres' ? '#1a1814' : '#8a7d6b', boxShadow: onglet === 'apres' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none' }}>
+            ✓ Après visite <span style={{ fontSize: '11px', color: '#a09480', marginLeft: '4px' }}>{analyses.filter(a => a.statut_visite === 'apres_visite').length}</span>
+          </button>
+        </div>
 
         {/* Bannière gamification profil */}
         {profils.length === 0 ? (
@@ -157,35 +177,56 @@ export default function Dashboard() {
             <a className="btn-primary" href="/">Analyser un bien →</a>
           </div>
         ) : (
-          <div className="grid">
-            {analyses.map(a => (
-              <div key={a.id} className="card">
-                <div className="card-verdict" style={{ backgroundColor: decisionBg(a.decision) }}>
-                  <span className="decision-badge" style={{ backgroundColor: `${decisionColor(a.decision)}18`, color: decisionColor(a.decision) }}>
-                    {a.decision === 'ACHETER' ? '✓ ' : a.decision === 'FUIR' ? '✕ ' : '~ '}{a.decision}
-                  </span>
-                  <span className="score-badge" style={{ color: scoreColor(a.score_global) }}>
-                    {a.score_global}<span className="score-denom">/10</span>
-                  </span>
+          <>
+            {(() => {
+              const filtered = analyses.filter(a => onglet === 'avant'
+                ? (!a.statut_visite || a.statut_visite === 'avant_visite')
+                : a.statut_visite === 'apres_visite'
+              )
+              return filtered.length === 0 ? (
+                <div className="empty">
+                  <div className="empty-icon">{onglet === 'avant' ? '🔍' : '✓'}</div>
+                  <div className="empty-title">{onglet === 'avant' ? 'Aucune analyse en attente de visite' : 'Aucune analyse après visite'}</div>
+                  <div className="empty-sub">{onglet === 'avant' ? 'Lancez une nouvelle analyse' : 'Basculez une analyse depuis l\'onglet "Avant visite"'}</div>
                 </div>
-                <div className="card-body">
-                  <div className="card-ville">{a.ville || 'Localisation non renseignée'}</div>
-                  <div className="card-meta">
-                    {a.type_bien && `${a.type_bien} · `}
-                    {a.prix && `${Math.round(a.prix).toLocaleString('fr-FR')} € `}
-                    {a.surface && `· ${a.surface} m²`}
-                  </div>
-                  {a.verdict_resume && <div className="card-resume">« {a.verdict_resume} »</div>}
-                  <div className="card-actions">
-                    <button className="card-btn card-btn-voir" onClick={() => setSelected(a)}>Voir le rapport</button>
-                    <button className="card-btn card-btn-pdf" onClick={() => telechargerPDF(a)}>↓ PDF</button>
-                    <button className="card-btn card-btn-delete" onClick={() => supprimerAnalyse(a.id)}>✕</button>
-                  </div>
+              ) : (
+                <div className="grid">
+                  {filtered.map(a => (
+                    <div key={a.id} className="card">
+                      <div className="card-verdict" style={{ backgroundColor: decisionBg(a.decision) }}>
+                        <span className="decision-badge" style={{ backgroundColor: `${decisionColor(a.decision)}18`, color: decisionColor(a.decision) }}>
+                          {a.decision === 'ACHETER' ? '✓ ' : a.decision === 'FUIR' ? '✕ ' : '~ '}{a.decision}
+                        </span>
+                        <span className="score-badge" style={{ color: scoreColor(a.score_global) }}>
+                          {a.score_global}<span className="score-denom">/10</span>
+                        </span>
+                      </div>
+                      <div className="card-body">
+                        <div className="card-ville">{a.ville || 'Localisation non renseignée'}</div>
+                        <div className="card-meta">
+                          {a.type_bien && `${a.type_bien} · `}
+                          {a.prix && `${Math.round(a.prix).toLocaleString('fr-FR')} € `}
+                          {a.surface && `· ${a.surface} m²`}
+                        </div>
+                        {a.verdict_resume && <div className="card-resume">« {a.verdict_resume} »</div>}
+                        <div className="card-actions">
+                          <button className="card-btn card-btn-voir" onClick={() => setSelected(a)}>Voir</button>
+                          <button className="card-btn card-btn-pdf" onClick={() => telechargerPDF(a)}>↓ PDF</button>
+                          {onglet === 'avant' ? (
+                            <button className="card-btn card-btn-visite" onClick={() => basculerStatut(a.id, 'apres_visite')} title="Marquer comme visité">✓ Visité</button>
+                          ) : (
+                            <button className="card-btn card-btn-back" onClick={() => basculerStatut(a.id, 'avant_visite')} title="Remettre en avant visite">↩</button>
+                          )}
+                          <button className="card-btn card-btn-delete" onClick={() => supprimerAnalyse(a.id)}>✕</button>
+                        </div>
+                      </div>
+                      <div className="card-date">{formatDate(a.created_at)}</div>
+                    </div>
+                  ))}
                 </div>
-                <div className="card-date">{formatDate(a.created_at)}</div>
-              </div>
-            ))}
-          </div>
+              )
+            })()}
+          </>
         )}
       </div>
 

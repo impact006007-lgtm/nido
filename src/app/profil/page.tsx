@@ -278,8 +278,8 @@ export default function ProfilPage() {
                 <input className="input" type="number" placeholder="350 000" value={form.budget_max || ''} onChange={e => setF('budget_max', e.target.value ? parseInt(e.target.value) : null)} />
               </div>
               <div>
-                <label className="label">Nombre de pièces minimum</label>
-                <input className="input" type="number" placeholder="4" value={form.pieces_min || ''} onChange={e => setF('pieces_min', e.target.value ? parseInt(e.target.value) : null)} />
+                <label className="label">Nombre de chambres minimum</label>
+                <input className="input" type="number" placeholder="3" value={form.pieces_min || ''} onChange={e => setF('pieces_min', e.target.value ? parseInt(e.target.value) : null)} />
               </div>
             </div>
 
@@ -354,7 +354,7 @@ export default function ProfilPage() {
                         {p.zone && <span className="tag">{p.zone === 'urbain' ? '🏙 Urbain' : p.zone === 'peri_urbain' ? '🏘 Péri-urbain' : '🌾 Rural'}</span>}
                         {p.priorite && <span className="tag">{p.priorite === 'cle_en_main' ? '✓ Clé en main' : p.priorite === 'a_renover' ? '🔨 À rénover' : '↔ Flexible'}</span>}
                         {p.budget_max && <span className="tag">≤ {p.budget_max.toLocaleString('fr-FR')} €</span>}
-                        {p.pieces_min && <span className="tag">≥ {p.pieces_min} pièces</span>}
+                        {p.pieces_min && <span className="tag">≥ {p.pieces_min} chambres</span>}
                         {p.jardin && <span className="tag">🌿 Jardin</span>}
                       </div>
                       <div className="profil-completion">
