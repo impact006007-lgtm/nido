@@ -422,8 +422,8 @@ function NidoPDFApresVisiteDocument({ data, ac, ville, typeBien }: { data: any, 
 
         {/* Footer */}
         <View style={styles.footer} fixed>
-          <Text style={styles.footerLeft}>NIDO · Analyse après visite par IA · {date}</Text>
-          <Text style={styles.footerRight}>Outil d'aide à la décision — ne remplace pas un diagnostic certifié</Text>
+          <Text style={styles.footerText}>NIDO · Analyse après visite par IA · {date}</Text>
+          <Text style={styles.footerText}>Outil d'aide à la décision — ne remplace pas un diagnostic certifié</Text>
         </View>
       </Page>
     </Document>
