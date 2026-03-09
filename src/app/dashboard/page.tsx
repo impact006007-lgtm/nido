@@ -15,6 +15,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<any>(null)
   const [onglet, setOnglet] = useState<'avant' | 'apres'>('avant')
+  const [uploadModal, setUploadModal] = useState<any>(null) // analyse en cours d'upload
+  const [uploadDocs, setUploadDocs] = useState<any[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [uploadResult, setUploadResult] = useState<any>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -49,6 +53,67 @@ export default function Dashboard() {
   async function basculerStatut(id: string, statut: 'avant_visite' | 'apres_visite') {
     await supabase.from('analyses').update({ statut_visite: statut }).eq('id', id)
     setAnalyses(prev => prev.map(a => a.id === id ? { ...a, statut_visite: statut } : a))
+  }
+
+  function ouvrirUpload(a: any) {
+    setUploadModal(a)
+    setUploadDocs([])
+    setUploadResult(null)
+  }
+
+  async function ajouterDoc(file: File, type: string) {
+    const base64 = await new Promise<string>((res, rej) => {
+      const r = new FileReader()
+      r.onload = () => res((r.result as string).split(',')[1])
+      r.onerror = () => rej(new Error('Lecture échouée'))
+      r.readAsDataURL(file)
+    })
+    setUploadDocs(prev => [...prev, {
+      type,
+      nom_fichier: file.name,
+      base64,
+      media_type: file.type,
+      storage_path: `${uploadModal.id}/${type}_${Date.now()}_${file.name}`
+    }])
+  }
+
+  async function analyserDocs() {
+    if (!uploadModal || uploadDocs.length === 0) return
+    setUploading(true)
+    try {
+      // Upload vers Supabase Storage
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token || ''
+
+      for (const doc of uploadDocs) {
+        const bytes = Uint8Array.from(atob(doc.base64), c => c.charCodeAt(0))
+        await supabase.storage.from('documents').upload(doc.storage_path, bytes, { contentType: doc.media_type })
+      }
+
+      // Envoyer à l'API pour analyse
+      const res = await fetch('/api/analyser-docs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ analyse_id: uploadModal.id, documents: uploadDocs })
+      })
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+
+      setUploadResult(data.analyseComplementaire)
+
+      // Mettre à jour la carte dans le state
+      setAnalyses(prev => prev.map(a => a.id === uploadModal.id ? {
+        ...a,
+        score_global: data.analyseComplementaire.score_revise,
+        decision: data.analyseComplementaire.verdict_revise?.decision,
+        verdict_resume: data.analyseComplementaire.verdict_revise?.resume,
+        has_docs: true
+      } : a))
+
+    } catch (e: any) {
+      alert('Erreur : ' + e.message)
+    }
+    setUploading(false)
   }
 
   function formatDate(iso: string) {
@@ -102,6 +167,9 @@ export default function Dashboard() {
         .card-btn-visite { background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; font-weight: 500; }
         .card-btn-visite:hover { background: #dcfce7; }
         .card-btn-back { flex: 0 !important; padding: 7px 10px; background: #faf8f5; border: 1px solid #e8e2d9; color: #8a7d6b; }
+        .card-btn-back:hover { background: #f0ebe3; }
+        .card-btn-docs { background: #f0f4ff; border: 1px solid #c7d2fe; color: #4338ca; font-weight: 500; }
+        .card-btn-docs:hover { background: #e0e7ff; }
         .card-btn-back:hover { background: #f0ebe3; }
         .card-btn-pdf:hover { background: #2d2a24; }
         .card-date { font-size: 10px; color: #c4b99a; text-align: right; padding: 0 18px 12px; }
@@ -215,7 +283,10 @@ export default function Dashboard() {
                           {onglet === 'avant' ? (
                             <button className="card-btn card-btn-visite" onClick={() => basculerStatut(a.id, 'apres_visite')} title="Marquer comme visité">✓ Visité</button>
                           ) : (
-                            <button className="card-btn card-btn-back" onClick={() => basculerStatut(a.id, 'avant_visite')} title="Remettre en avant visite">↩</button>
+                            <>
+                              <button className="card-btn card-btn-docs" onClick={() => ouvrirUpload(a)}>📎 Docs{a.has_docs ? ' ✓' : ''}</button>
+                              <button className="card-btn card-btn-back" onClick={() => basculerStatut(a.id, 'avant_visite')} title="Remettre en avant visite">↩</button>
+                            </>
                           )}
                           <button className="card-btn card-btn-delete" onClick={() => supprimerAnalyse(a.id)}>✕</button>
                         </div>
@@ -236,6 +307,94 @@ export default function Dashboard() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <button className="modal-close" onClick={() => setSelected(null)}>✕ Fermer</button>
             <RapportModal data={selected.rapport_complet} ville={selected.ville} typeBien={selected.type_bien} onPDF={() => telechargerPDF(selected)} />
+          </div>
+        </div>
+      )}
+
+      {/* Modal upload documents */}
+      {uploadModal && (
+        <div className="modal-overlay" onClick={() => setUploadModal(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+            <button className="modal-close" onClick={() => setUploadModal(null)}>✕ Fermer</button>
+
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '26px', fontWeight: 600, color: '#1a1814', marginBottom: '4px' }}>
+              Documents post-visite
+            </div>
+            <div style={{ fontSize: '12px', color: '#8a7d6b', marginBottom: '24px' }}>
+              {uploadModal.ville} — Upload les diagnostics pour recalculer le score
+            </div>
+
+            {!uploadResult ? (
+              <>
+                {/* Sélecteurs de type + upload */}
+                {[
+                  { type: 'dpe', label: '⚡ DPE', desc: 'Diagnostic de performance énergétique' },
+                  { type: 'elec', label: '🔌 Électricité', desc: 'Diagnostic électrique' },
+                  { type: 'gaz', label: '🔥 Gaz', desc: 'Diagnostic gaz' },
+                  { type: 'spanc', label: '🚽 SPANC', desc: 'Assainissement non collectif' },
+                  { type: 'divers', label: '📄 Divers', desc: 'Autres documents' },
+                ].map(({ type, label, desc }) => {
+                  const existing = uploadDocs.filter(d => d.type === type)
+                  return (
+                    <div key={type} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: existing.length > 0 ? '#f0fdf4' : '#faf8f5', border: `1px solid ${existing.length > 0 ? '#bbf7d0' : '#e8e2d9'}`, borderRadius: '10px', marginBottom: '8px' }}>
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: 500, color: '#1a1814' }}>{label}</div>
+                        <div style={{ fontSize: '11px', color: '#8a7d6b' }}>
+                          {existing.length > 0 ? existing.map(d => d.nom_fichier).join(', ') : desc}
+                        </div>
+                      </div>
+                      <label style={{ background: existing.length > 0 ? '#16a34a' : '#1a1814', color: '#fff', borderRadius: '7px', padding: '7px 14px', fontSize: '11px', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        {existing.length > 0 ? '✓ Ajouté' : '+ Ajouter'}
+                        <input type="file" accept=".pdf,image/*" style={{ display: 'none' }} onChange={e => e.target.files?.[0] && ajouterDoc(e.target.files[0], type)} />
+                      </label>
+                    </div>
+                  )
+                })}
+
+                {uploadDocs.length > 0 && (
+                  <button
+                    onClick={analyserDocs}
+                    disabled={uploading}
+                    style={{ width: '100%', marginTop: '16px', background: uploading ? '#a09480' : '#1a1814', color: '#f5f2ed', border: 'none', borderRadius: '10px', padding: '14px', fontFamily: 'DM Sans, sans-serif', fontSize: '14px', fontWeight: 500, cursor: uploading ? 'not-allowed' : 'pointer' }}
+                  >
+                    {uploading ? '⏳ Analyse en cours…' : `🔍 Analyser ${uploadDocs.length} document${uploadDocs.length > 1 ? 's' : ''}`}
+                  </button>
+                )}
+              </>
+            ) : (
+              /* Résultat de l'analyse */
+              <div>
+                <div style={{ background: uploadResult.delta_score >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${uploadResult.delta_score >= 0 ? '#bbf7d0' : '#fecaca'}`, borderRadius: '12px', padding: '20px', marginBottom: '16px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: '#8a7d6b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px' }}>Score révisé</div>
+                  <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '48px', fontWeight: 700, color: '#1a1814', lineHeight: 1 }}>
+                    {uploadResult.score_revise}<span style={{ fontSize: '16px', color: '#a09480' }}>/10</span>
+                  </div>
+                  <div style={{ fontSize: '13px', marginTop: '6px', color: uploadResult.delta_score >= 0 ? '#16a34a' : '#dc2626', fontWeight: 500 }}>
+                    {uploadResult.delta_score >= 0 ? '▲' : '▼'} {Math.abs(uploadResult.delta_score)} point{Math.abs(uploadResult.delta_score) > 1 ? 's' : ''} par rapport à l'analyse initiale
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '13px', color: '#2d2a24', lineHeight: 1.7, marginBottom: '16px', fontStyle: 'italic', background: '#faf8f5', border: '1px solid #e8e2d9', borderRadius: '10px', padding: '16px' }}>
+                  {uploadResult.synthese}
+                </div>
+
+                {uploadResult.observations_docs?.map((obs: any, i: number) => (
+                  <div key={i} style={{ background: '#fff', border: '1px solid #e8e2d9', borderRadius: '10px', padding: '14px 16px', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 600, color: '#1a1814' }}>{obs.nom}</div>
+                      <span style={{ fontSize: '10px', padding: '3px 8px', borderRadius: '4px', background: obs.impact === 'positif' ? '#f0fdf4' : obs.impact === 'négatif' ? '#fef2f2' : '#fafafa', color: obs.impact === 'positif' ? '#16a34a' : obs.impact === 'négatif' ? '#dc2626' : '#8a7d6b', border: `1px solid ${obs.impact === 'positif' ? '#bbf7d0' : obs.impact === 'négatif' ? '#fecaca' : '#e8e2d9'}` }}>
+                        {obs.impact}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#4a4035', lineHeight: 1.6 }}>{obs.points_cles}</div>
+                  </div>
+                ))}
+
+                <button onClick={() => setUploadModal(null)} style={{ width: '100%', marginTop: '8px', background: '#1a1814', color: '#f5f2ed', border: 'none', borderRadius: '10px', padding: '12px', fontFamily: 'DM Sans, sans-serif', fontSize: '13px', cursor: 'pointer' }}>
+                  Fermer
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
