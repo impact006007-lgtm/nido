@@ -4,6 +4,22 @@ import { supabaseAdmin } from '@/lib/supabase'
 
 const anthropic = new Anthropic()
 
+// Extraire le texte d'un PDF base64 via pdf-parse
+async function extraireTextePDF(base64: string): Promise<string> {
+  try {
+    const pdfParse = (await import('pdf-parse')).default
+    const buffer = Buffer.from(base64, 'base64')
+    const result = await pdfParse(buffer, { max: 3 }) // max 3 pages
+    return result.text
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 4000) // max 4000 caractères par doc
+  } catch (e) {
+    console.error('Erreur extraction PDF:', e)
+    return '[Texte non extractible]'
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
@@ -17,7 +33,6 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { analyse_id, documents } = body
-    // documents = [{ type, nom_fichier, storage_path, base64, media_type }]
 
     // Récupérer l'analyse originale
     const { data: analyse, error: analyseError } = await supabaseAdmin
@@ -43,21 +58,28 @@ export async function POST(request: NextRequest) {
 
     const rapportOriginal = analyse.rapport_complet
 
-    // Construire le prompt avec les docs
-    const docsDesc = documents.map((d: any) => `- ${d.type.toUpperCase()} : ${d.nom_fichier}`).join('\n')
+    // Extraire le texte de chaque document
+    const docsTextes: string[] = []
+    for (const doc of documents) {
+      if (doc.base64) {
+        if (doc.media_type === 'application/pdf') {
+          const texte = await extraireTextePDF(doc.base64)
+          docsTextes.push(`=== ${doc.type.toUpperCase()} : ${doc.nom_fichier} ===\n${texte}`)
+        } else {
+          docsTextes.push(`=== ${doc.type.toUpperCase()} : ${doc.nom_fichier} ===\n[Document image]`)
+        }
+      }
+    }
 
-    // Construire les content blocks pour Claude
-    const contentBlocks: any[] = [
-      {
-        type: 'text',
-        text: `Tu es NIDO, expert immobilier français. Voici l'analyse initiale d'un bien :
+    const prompt = `Tu es NIDO, expert immobilier français. Voici l'analyse initiale d'un bien :
 
-SCORE INITIAL : ${rapportOriginal.scores?.global}/10
-VERDICT INITIAL : ${rapportOriginal.verdict?.decision} — ${rapportOriginal.verdict?.resume}
-ALERTES INITIALES : ${rapportOriginal.alertes?.map((a: any) => `${a.categorie}: ${a.observation}`).join(' | ')}
+SCORE INITIAL : ${rapportOriginal?.scores?.global}/10
+VERDICT INITIAL : ${rapportOriginal?.verdict?.decision} — ${rapportOriginal?.verdict?.resume}
+ALERTES INITIALES : ${rapportOriginal?.alertes?.map((a: any) => `${a.categorie}: ${a.observation}`).join(' | ')}
 
-Documents fournis après visite :
-${docsDesc}
+Documents techniques fournis après visite :
+
+${docsTextes.join('\n\n')}
 
 Analyse ces documents et génère :
 1. Les nouvelles observations par document
@@ -65,7 +87,7 @@ Analyse ces documents et génère :
 3. Un score révisé (peut augmenter ou baisser selon ce que révèlent les docs)
 4. Une recommandation finale mise à jour
 
-IMPORTANT : Texte brut uniquement dans tous les champs string. N'utilise JAMAIS de markdown (**gras**, *italique*).
+IMPORTANT : Texte brut uniquement. N'utilise JAMAIS de markdown (**gras**, *italique*).
 
 Réponds UNIQUEMENT en JSON valide :
 {
@@ -78,36 +100,17 @@ Réponds UNIQUEMENT en JSON valide :
   "nouvelles_alertes": [{ "niveau": "rouge|orange|vert", "categorie": "string", "observation": "string" }],
   "synthese": "string"
 }`
-      }
-    ]
-
-    // Ajouter les documents comme content blocks
-    for (const doc of documents) {
-      if (doc.base64 && doc.media_type) {
-        if (doc.media_type === 'application/pdf') {
-          contentBlocks.push({
-            type: 'document',
-            source: { type: 'base64', media_type: 'application/pdf', data: doc.base64 }
-          })
-        } else {
-          contentBlocks.push({
-            type: 'image',
-            source: { type: 'base64', media_type: doc.media_type, data: doc.base64 }
-          })
-        }
-      }
-    }
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-5',
-      max_tokens: 3000,
+      max_tokens: 2000,
       temperature: 0.3,
-      messages: [{ role: 'user', content: contentBlocks }]
+      messages: [{ role: 'user', content: prompt }]
     })
 
     const text = response.content.map((b: any) => b.text || '').join('')
-    const clean = text.replace(/```json|```/g, '').trim()
-    const analyseComplementaire = JSON.parse(clean)
+    const cleanText = text.replace(/```json|```/g, '').trim()
+    const analyseComplementaire = JSON.parse(cleanText)
 
     // Sauvegarder chaque document en DB
     for (const doc of documents) {
@@ -121,7 +124,7 @@ Réponds UNIQUEMENT en JSON valide :
       })
     }
 
-    // Mettre à jour le score global de l'analyse
+    // Mettre à jour l'analyse
     await supabaseAdmin
       .from('analyses')
       .update({
