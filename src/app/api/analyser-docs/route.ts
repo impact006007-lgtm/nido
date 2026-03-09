@@ -130,11 +130,11 @@ Réponds UNIQUEMENT en JSON valide :
         verdict_resume: analyseComplementaire.verdict_revise?.resume,
         analyse_complementaire: analyseComplementaire,
         has_docs: true,
-        nb_analyses_docs: nbActuel + 1
+        nb_analyses_docs: (nbActuel ?? 0) + 1
       })
       .eq('id', analyse_id)
 
-    return NextResponse.json({ success: true, analyseComplementaire, nb_analyses_docs: nbActuel + 1 })
+    return NextResponse.json({ success: true, analyseComplementaire, nb_analyses_docs: (nbActuel ?? 0) + 1 })
 
   } catch (error: any) {
     console.error('Erreur analyse docs:', error)
