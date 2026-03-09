@@ -14,11 +14,17 @@ export default function Dashboard() {
   const [profils, setProfils] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<any>(null)
+  const [selectedOnglet, setSelectedOnglet] = useState<'avant' | 'apres'>('avant')
   const [onglet, setOnglet] = useState<'avant' | 'apres'>('avant')
-  const [uploadModal, setUploadModal] = useState<any>(null) // analyse en cours d'upload
-  const [uploadDocs, setUploadDocs] = useState<any[]>([])
+  const [uploadModal, setUploadModal] = useState<any>(null)
+  const [uploadDocs, setUploadDocs] = useState<any[]>([]) // docs en attente d'upload
+  const [docsExistants, setDocsExistants] = useState<any[]>([]) // docs déjà uploadés
   const [uploading, setUploading] = useState(false)
   const [uploadResult, setUploadResult] = useState<any>(null)
+  const [nbAnalyses, setNbAnalyses] = useState(0) // compteur analyses docs
+  const [docsModifies, setDocsModifies] = useState(false) // garde-fou relance
+  const [showHistorique, setShowHistorique] = useState(false)
+  const [historiqueAnalyses, setHistoriqueAnalyses] = useState<any[]>([])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -31,7 +37,7 @@ export default function Dashboard() {
   async function chargerAnalyses(userId: string) {
     const { data } = await supabase
       .from('analyses')
-      .select('id, created_at, ville, type_bien, prix, surface, score_global, decision, verdict_resume, rapport_complet')
+      .select('id, created_at, ville, type_bien, prix, surface, score_global, decision, verdict_resume, rapport_complet, analyse_complementaire, has_docs, statut_visite')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(50)
@@ -59,6 +65,32 @@ export default function Dashboard() {
     setUploadModal(a)
     setUploadDocs([])
     setUploadResult(null)
+    setDocsModifies(false)
+    setShowHistorique(false)
+    // Charger les docs existants et le compteur
+    supabase.from('documents').select('*').eq('analyse_id', a.id).order('created_at', { ascending: false })
+      .then(({ data }) => {
+        // Garder uniquement le dernier doc de chaque type
+        const dernierParType: any = {}
+        ;(data || []).forEach((d: any) => { if (!dernierParType[d.type]) dernierParType[d.type] = d })
+        setDocsExistants(Object.values(dernierParType))
+      })
+    // Compter nb d'analyses déjà faites
+    supabase.from('documents').select('id', { count: 'exact' }).eq('analyse_id', a.id)
+      .then(({ count }) => setNbAnalyses(Math.floor((count || 0) / 1)))
+    // Charger historique analyses
+    supabase.from('analyses_docs_historique').select('*').eq('analyse_id', a.id).order('created_at', { ascending: false })
+      .then(({ data }) => setHistoriqueAnalyses(data || []))
+  }
+
+  async function resetDoc(type: string) {
+    // Supprimer du storage et de la DB
+    const doc = docsExistants.find(d => d.type === type)
+    if (doc?.storage_path) await supabase.storage.from('documents').remove([doc.storage_path])
+    if (doc?.id) await supabase.from('documents').delete().eq('id', doc.id)
+    setDocsExistants(prev => prev.filter(d => d.type !== type))
+    setUploadDocs(prev => prev.filter(d => d.type !== type))
+    setDocsModifies(true)
   }
 
   async function ajouterDoc(file: File, type: string) {
@@ -68,29 +100,30 @@ export default function Dashboard() {
       r.onerror = () => rej(new Error('Lecture échouée'))
       r.readAsDataURL(file)
     })
-    setUploadDocs(prev => [...prev, {
-      type,
-      nom_fichier: file.name,
-      base64,
-      media_type: file.type,
-      storage_path: `${uploadModal.id}/${type}_${Date.now()}_${file.name}`
-    }])
+    // Remplace si déjà un doc de ce type en attente
+    setUploadDocs(prev => {
+      const filtered = prev.filter(d => d.type !== type)
+      return [...filtered, {
+        type, nom_fichier: file.name, base64, media_type: file.type,
+        storage_path: `${uploadModal.id}/${type}_${Date.now()}_${file.name}`
+      }]
+    })
+    setDocsModifies(true)
   }
 
   async function analyserDocs() {
     if (!uploadModal || uploadDocs.length === 0) return
+    if (nbAnalyses >= 3) { alert('Limite de 3 analyses atteinte pour ce bien.'); return }
     setUploading(true)
     try {
-      // Upload vers Supabase Storage
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token || ''
 
       for (const doc of uploadDocs) {
         const bytes = Uint8Array.from(atob(doc.base64), c => c.charCodeAt(0))
-        await supabase.storage.from('documents').upload(doc.storage_path, bytes, { contentType: doc.media_type })
+        await supabase.storage.from('documents').upload(doc.storage_path, bytes, { contentType: doc.media_type, upsert: true })
       }
 
-      // Envoyer à l'API pour analyse
       const res = await fetch('/api/analyser-docs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -100,19 +133,27 @@ export default function Dashboard() {
       if (data.error) throw new Error(data.error)
 
       setUploadResult(data.analyseComplementaire)
+      setNbAnalyses(prev => prev + 1)
+      setDocsModifies(false)
 
-      // Mettre à jour la carte dans le state
+      // Sauvegarder dans historique
+      await supabase.from('analyses_docs_historique').insert({
+        analyse_id: uploadModal.id,
+        user_id: session?.user.id,
+        analyse_complementaire: data.analyseComplementaire,
+        nb_docs: uploadDocs.length
+      })
+
       setAnalyses(prev => prev.map(a => a.id === uploadModal.id ? {
         ...a,
         score_global: data.analyseComplementaire.score_revise,
         decision: data.analyseComplementaire.verdict_revise?.decision,
         verdict_resume: data.analyseComplementaire.verdict_revise?.resume,
+        analyse_complementaire: data.analyseComplementaire,
         has_docs: true
       } : a))
 
-    } catch (e: any) {
-      alert('Erreur : ' + e.message)
-    }
+    } catch (e: any) { alert('Erreur : ' + e.message) }
     setUploading(false)
   }
 
@@ -278,7 +319,7 @@ export default function Dashboard() {
                         </div>
                         {a.verdict_resume && <div className="card-resume">« {a.verdict_resume} »</div>}
                         <div className="card-actions">
-                          <button className="card-btn card-btn-voir" onClick={() => setSelected(a)}>Voir</button>
+                          <button className="card-btn card-btn-voir" onClick={() => { setSelected(a); setSelectedOnglet(a.has_docs ? 'apres' : 'avant') }}>Voir</button>
                           <button className="card-btn card-btn-pdf" onClick={() => telechargerPDF(a)}>↓ PDF</button>
                           {onglet === 'avant' ? (
                             <button className="card-btn card-btn-visite" onClick={() => basculerStatut(a.id, 'apres_visite')} title="Marquer comme visité">✓ Visité</button>
@@ -306,27 +347,55 @@ export default function Dashboard() {
         <div className="modal-overlay" onClick={() => setSelected(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <button className="modal-close" onClick={() => setSelected(null)}>✕ Fermer</button>
-            <RapportModal data={selected.rapport_complet} ville={selected.ville} typeBien={selected.type_bien} onPDF={() => telechargerPDF(selected)} />
+
+            {/* Onglets avant/après */}
+            <div style={{ display: 'flex', gap: '4px', background: '#ede8e0', borderRadius: '8px', padding: '3px', marginBottom: '20px', width: 'fit-content' }}>
+              <button onClick={() => setSelectedOnglet('avant')} style={{ padding: '7px 16px', borderRadius: '6px', border: 'none', fontFamily: 'DM Sans, sans-serif', fontSize: '12px', fontWeight: 500, cursor: 'pointer', background: selectedOnglet === 'avant' ? '#fff' : 'transparent', color: selectedOnglet === 'avant' ? '#1a1814' : '#8a7d6b', boxShadow: selectedOnglet === 'avant' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none' }}>
+                🔍 Analyse initiale
+              </button>
+              <button onClick={() => { if (selected.has_docs) { setSelectedOnglet('apres'); supabase.from('analyses_docs_historique').select('*').eq('analyse_id', selected.id).order('created_at', { ascending: false }).then(({ data }) => setHistoriqueAnalyses(data || [])) } }} style={{ padding: '7px 16px', borderRadius: '6px', border: 'none', fontFamily: 'DM Sans, sans-serif', fontSize: '12px', fontWeight: 500, cursor: selected.has_docs ? 'pointer' : 'not-allowed', background: selectedOnglet === 'apres' ? '#fff' : 'transparent', color: selectedOnglet === 'apres' ? '#1a1814' : selected.has_docs ? '#8a7d6b' : '#c4b99a', boxShadow: selectedOnglet === 'apres' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none', opacity: selected.has_docs ? 1 : 0.5 }}>
+                📎 Après visite {selected.has_docs ? '✓' : '—'}
+              </button>
+            </div>
+
+            {selectedOnglet === 'avant' ? (
+              <RapportModal data={selected.rapport_complet} ville={selected.ville} typeBien={selected.type_bien} onPDF={() => telechargerPDF(selected)} />
+            ) : (
+              <RapportApresVisite
+                data={selected.analyse_complementaire}
+                scoreInitial={selected.rapport_complet?.scores?.global}
+                historique={historiqueAnalyses}
+                showHistorique={showHistorique}
+                setShowHistorique={setShowHistorique}
+                onPDF={async () => {
+                  const { genererPDFApresVisite } = await import('@/lib/NidoPDF')
+                  await genererPDFApresVisite(selected.analyse_complementaire, selected.rapport_complet, selected.ville, selected.type_bien)
+                }}
+              />
+            )}
           </div>
         </div>
       )}
 
       {/* Modal upload documents */}
       {uploadModal && (
-        <div className="modal-overlay" onClick={() => setUploadModal(null)}>
+        <div className="modal-overlay" onClick={() => { setUploadModal(null); setUploadResult(null); setUploadDocs([]) }}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-            <button className="modal-close" onClick={() => setUploadModal(null)}>✕ Fermer</button>
+            <button className="modal-close" onClick={() => { setUploadModal(null); setUploadResult(null); setUploadDocs([]) }}>✕ Fermer</button>
 
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '26px', fontWeight: 600, color: '#1a1814', marginBottom: '4px' }}>
-              Documents post-visite
-            </div>
-            <div style={{ fontSize: '12px', color: '#8a7d6b', marginBottom: '24px' }}>
-              {uploadModal.ville} — Upload les diagnostics pour recalculer le score
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '26px', fontWeight: 600, color: '#1a1814', marginBottom: '4px' }}>Documents post-visite</div>
+            <div style={{ fontSize: '12px', color: '#8a7d6b', marginBottom: '16px' }}>{uploadModal.ville}</div>
+
+            {/* Garde-fou compteur */}
+            <div style={{ background: nbAnalyses >= 3 ? '#fef2f2' : nbAnalyses >= 2 ? '#fffbeb' : '#f0fdf4', border: `1px solid ${nbAnalyses >= 3 ? '#fecaca' : nbAnalyses >= 2 ? '#fde68a' : '#bbf7d0'}`, borderRadius: '10px', padding: '10px 14px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: '12px', color: nbAnalyses >= 3 ? '#dc2626' : nbAnalyses >= 2 ? '#92400e' : '#16a34a', fontWeight: 500 }}>
+                {nbAnalyses >= 3 ? '🚫 Limite atteinte — 3 analyses max par bien' : `🔍 ${nbAnalyses}/3 analyses utilisées — ${3 - nbAnalyses} restante${3 - nbAnalyses > 1 ? 's' : ''}`}
+              </div>
+              <div style={{ fontSize: '10px', color: '#a09480' }}>Max 3 / bien</div>
             </div>
 
             {!uploadResult ? (
               <>
-                {/* Sélecteurs de type + upload */}
                 {[
                   { type: 'dpe', label: '⚡ DPE', desc: 'Diagnostic de performance énergétique' },
                   { type: 'elec', label: '🔌 Électricité', desc: 'Diagnostic électrique' },
@@ -334,65 +403,78 @@ export default function Dashboard() {
                   { type: 'spanc', label: '🚽 SPANC', desc: 'Assainissement non collectif' },
                   { type: 'divers', label: '📄 Divers', desc: 'Autres documents' },
                 ].map(({ type, label, desc }) => {
-                  const existing = uploadDocs.filter(d => d.type === type)
+                  const docExistant = docsExistants.find(d => d.type === type)
+                  const docEnAttente = uploadDocs.find(d => d.type === type)
+                  const doc = docEnAttente || docExistant
+                  const isExistant = !docEnAttente && !!docExistant
                   return (
-                    <div key={type} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: existing.length > 0 ? '#f0fdf4' : '#faf8f5', border: `1px solid ${existing.length > 0 ? '#bbf7d0' : '#e8e2d9'}`, borderRadius: '10px', marginBottom: '8px' }}>
-                      <div>
-                        <div style={{ fontSize: '13px', fontWeight: 500, color: '#1a1814' }}>{label}</div>
-                        <div style={{ fontSize: '11px', color: '#8a7d6b' }}>
-                          {existing.length > 0 ? existing.map(d => d.nom_fichier).join(', ') : desc}
+                    <div key={type} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: doc ? (isExistant ? '#f0fdf4' : '#f0f4ff') : '#faf8f5', border: `1px solid ${doc ? (isExistant ? '#bbf7d0' : '#c7d2fe') : '#e8e2d9'}`, borderRadius: '10px', marginBottom: '8px', gap: '12px' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 500, color: '#1a1814', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {doc && <span style={{ color: isExistant ? '#16a34a' : '#4338ca', fontSize: '14px' }}>✓</span>}
+                          {label}
+                          {isExistant && <span style={{ fontSize: '10px', color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', padding: '1px 6px' }}>déjà uploadé</span>}
+                          {docEnAttente && <span style={{ fontSize: '10px', color: '#4338ca', background: '#f0f4ff', border: '1px solid #c7d2fe', borderRadius: '4px', padding: '1px 6px' }}>nouveau</span>}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#8a7d6b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {doc ? doc.nom_fichier : desc}
                         </div>
                       </div>
-                      <label style={{ background: existing.length > 0 ? '#16a34a' : '#1a1814', color: '#fff', borderRadius: '7px', padding: '7px 14px', fontSize: '11px', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                        {existing.length > 0 ? '✓ Ajouté' : '+ Ajouter'}
-                        <input type="file" accept=".pdf,image/*" style={{ display: 'none' }} onChange={e => e.target.files?.[0] && ajouterDoc(e.target.files[0], type)} />
-                      </label>
+                      <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                        {doc && (
+                          <button onClick={() => docExistant && !docEnAttente ? resetDoc(type) : setUploadDocs(prev => prev.filter(d => d.type !== type))}
+                            style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                            ✕ {isExistant ? 'Suppr.' : 'Reset'}
+                          </button>
+                        )}
+                        {nbAnalyses < 3 && (
+                          <label style={{ background: doc ? '#faf8f5' : '#1a1814', color: doc ? '#4a4035' : '#fff', border: `1px solid ${doc ? '#e8e2d9' : '#1a1814'}`, borderRadius: '7px', padding: '6px 12px', fontSize: '11px', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            {doc ? '↺ Changer' : '+ Ajouter'}
+                            <input type="file" accept=".pdf,image/*" style={{ display: 'none' }} onChange={e => { if (e.target.files?.[0]) ajouterDoc(e.target.files[0], type) }} />
+                          </label>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
 
-                {uploadDocs.length > 0 && (
-                  <button
-                    onClick={analyserDocs}
-                    disabled={uploading}
-                    style={{ width: '100%', marginTop: '16px', background: uploading ? '#a09480' : '#1a1814', color: '#f5f2ed', border: 'none', borderRadius: '10px', padding: '14px', fontFamily: 'DM Sans, sans-serif', fontSize: '14px', fontWeight: 500, cursor: uploading ? 'not-allowed' : 'pointer' }}
-                  >
-                    {uploading ? '⏳ Analyse en cours…' : `🔍 Analyser ${uploadDocs.length} document${uploadDocs.length > 1 ? 's' : ''}`}
+                {uploadDocs.length > 0 && nbAnalyses < 3 && (
+                  <button onClick={analyserDocs} disabled={uploading} style={{ width: '100%', marginTop: '16px', background: uploading ? '#a09480' : '#1a1814', color: '#f5f2ed', border: 'none', borderRadius: '10px', padding: '14px', fontFamily: 'DM Sans, sans-serif', fontSize: '14px', fontWeight: 500, cursor: uploading ? 'not-allowed' : 'pointer' }}>
+                    {uploading ? '⏳ Analyse en cours…' : `🔍 Analyser ${uploadDocs.length} nouveau${uploadDocs.length > 1 ? 'x' : ''} document${uploadDocs.length > 1 ? 's' : ''}`}
                   </button>
                 )}
               </>
             ) : (
-              /* Résultat de l'analyse */
               <div>
-                <div style={{ background: uploadResult.delta_score >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${uploadResult.delta_score >= 0 ? '#bbf7d0' : '#fecaca'}`, borderRadius: '12px', padding: '20px', marginBottom: '16px', textAlign: 'center' }}>
+                <div style={{ background: (uploadResult.delta_score || 0) >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${(uploadResult.delta_score || 0) >= 0 ? '#bbf7d0' : '#fecaca'}`, borderRadius: '12px', padding: '20px', marginBottom: '16px', textAlign: 'center' }}>
                   <div style={{ fontSize: '11px', color: '#8a7d6b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px' }}>Score révisé</div>
                   <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '48px', fontWeight: 700, color: '#1a1814', lineHeight: 1 }}>
                     {uploadResult.score_revise}<span style={{ fontSize: '16px', color: '#a09480' }}>/10</span>
                   </div>
-                  <div style={{ fontSize: '13px', marginTop: '6px', color: uploadResult.delta_score >= 0 ? '#16a34a' : '#dc2626', fontWeight: 500 }}>
-                    {uploadResult.delta_score >= 0 ? '▲' : '▼'} {Math.abs(uploadResult.delta_score)} point{Math.abs(uploadResult.delta_score) > 1 ? 's' : ''} par rapport à l'analyse initiale
+                  <div style={{ fontSize: '13px', marginTop: '6px', color: (uploadResult.delta_score || 0) >= 0 ? '#16a34a' : '#dc2626', fontWeight: 500 }}>
+                    {(uploadResult.delta_score || 0) >= 0 ? '▲' : '▼'} {Math.abs(uploadResult.delta_score || 0)} point{Math.abs(uploadResult.delta_score || 0) > 1 ? 's' : ''} vs analyse initiale
                   </div>
                 </div>
-
-                <div style={{ fontSize: '13px', color: '#2d2a24', lineHeight: 1.7, marginBottom: '16px', fontStyle: 'italic', background: '#faf8f5', border: '1px solid #e8e2d9', borderRadius: '10px', padding: '16px' }}>
+                <div style={{ fontSize: '13px', color: '#2d2a24', lineHeight: 1.7, marginBottom: '12px', fontStyle: 'italic', background: '#faf8f5', border: '1px solid #e8e2d9', borderRadius: '10px', padding: '14px' }}>
                   {uploadResult.synthese}
                 </div>
-
                 {uploadResult.observations_docs?.map((obs: any, i: number) => (
-                  <div key={i} style={{ background: '#fff', border: '1px solid #e8e2d9', borderRadius: '10px', padding: '14px 16px', marginBottom: '8px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <div key={i} style={{ background: '#fff', border: '1px solid #e8e2d9', borderRadius: '10px', padding: '12px 16px', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                       <div style={{ fontSize: '12px', fontWeight: 600, color: '#1a1814' }}>{obs.nom}</div>
-                      <span style={{ fontSize: '10px', padding: '3px 8px', borderRadius: '4px', background: obs.impact === 'positif' ? '#f0fdf4' : obs.impact === 'négatif' ? '#fef2f2' : '#fafafa', color: obs.impact === 'positif' ? '#16a34a' : obs.impact === 'négatif' ? '#dc2626' : '#8a7d6b', border: `1px solid ${obs.impact === 'positif' ? '#bbf7d0' : obs.impact === 'négatif' ? '#fecaca' : '#e8e2d9'}` }}>
-                        {obs.impact}
-                      </span>
+                      <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: obs.impact === 'positif' ? '#f0fdf4' : obs.impact === 'négatif' ? '#fef2f2' : '#fafafa', color: obs.impact === 'positif' ? '#16a34a' : obs.impact === 'négatif' ? '#dc2626' : '#8a7d6b', border: `1px solid ${obs.impact === 'positif' ? '#bbf7d0' : obs.impact === 'négatif' ? '#fecaca' : '#e8e2d9'}` }}>{obs.impact}</span>
                     </div>
                     <div style={{ fontSize: '12px', color: '#4a4035', lineHeight: 1.6 }}>{obs.points_cles}</div>
                   </div>
                 ))}
-
-                <button onClick={() => setUploadModal(null)} style={{ width: '100%', marginTop: '8px', background: '#1a1814', color: '#f5f2ed', border: 'none', borderRadius: '10px', padding: '12px', fontFamily: 'DM Sans, sans-serif', fontSize: '13px', cursor: 'pointer' }}>
-                  Fermer
-                </button>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+                  <button onClick={() => { setUploadResult(null); setUploadDocs([]) }} style={{ flex: 1, background: '#faf8f5', color: '#4a4035', border: '1px solid #e8e2d9', borderRadius: '10px', padding: '12px', fontFamily: 'DM Sans, sans-serif', fontSize: '13px', cursor: 'pointer' }}>
+                    ↺ Ajouter d'autres docs
+                  </button>
+                  <button onClick={() => { setUploadModal(null); setUploadResult(null); setUploadDocs([]) }} style={{ flex: 1, background: '#1a1814', color: '#f5f2ed', border: 'none', borderRadius: '10px', padding: '12px', fontFamily: 'DM Sans, sans-serif', fontSize: '13px', cursor: 'pointer' }}>
+                    Voir le rapport →
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -402,19 +484,164 @@ export default function Dashboard() {
   )
 }
 
-// Rapport simplifié pour la modal — réutilise les mêmes styles visuels
 function RapportModal({ data, ville, typeBien, onPDF }: { data: any, ville: string, typeBien: string, onPDF: () => void }) {
   if (!data) return <div style={{ padding: '40px', textAlign: 'center', color: '#a09480' }}>Rapport non disponible</div>
-
   const v = data.verdict
   const decision = v?.decision || 'NÉGOCIER'
   const cls = decision === 'ACHETER' ? '#052e16' : decision === 'FUIR' ? '#1f0505' : '#1c1003'
   const scoreColor = (s: number) => s >= 7 ? '#16a34a' : s >= 5 ? '#d97706' : '#dc2626'
+  return (
+    <div>
+      <div style={{ background: cls, borderRadius: '14px', padding: '28px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: decision === 'ACHETER' ? '#4ade80' : decision === 'FUIR' ? '#f87171' : '#fbbf24', marginBottom: '8px', fontWeight: 500 }}>
+              {decision === 'ACHETER' ? '✓ ' : decision === 'FUIR' ? '✕ ' : '~ '}{decision}
+            </div>
+            {v?.prix_recommande && <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '40px', fontWeight: 700, color: '#fff', lineHeight: 1 }}>{v.prix_recommande.toLocaleString('fr-FR')} €</div>}
+          </div>
+          {data.scores && <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '48px', fontWeight: 700, color: '#fff', lineHeight: 1 }}>{data.scores.global}<span style={{ fontSize: '16px', color: '#8b6914' }}>/10</span></div>}
+        </div>
+        {v?.resume && <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.65)', lineHeight: 1.7, marginTop: '14px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '14px' }}>{v.resume}</div>}
+      </div>
+      {data.scores && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '12px' }}>
+          {[['État bâti', 'etat_bati'], ['Qualité/Prix', 'rapport_qualite_prix'], ['Potentiel', 'potentiel'], ['DPE', 'dpe']].map(([label, key]) => (
+            <div key={key} style={{ background: '#fff', border: '1px solid #e8e2d9', borderRadius: '10px', padding: '12px', textAlign: 'center' }}>
+              <div style={{ fontSize: '9px', color: '#a09480', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>{label}</div>
+              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 700, color: scoreColor(data.scores[key as string]), lineHeight: 1 }}>{data.scores[key as string]}<span style={{ fontSize: '11px', color: '#c4b99a' }}>/10</span></div>
+            </div>
+          ))}
+        </div>
+      )}
+      {data.alertes?.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid #e8e2d9', borderRadius: '12px', marginBottom: '10px', overflow: 'hidden' }}>
+          <div style={{ padding: '14px 18px 10px', borderBottom: '1px solid #f5f2ed' }}><span style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#dc2626' }}>Alertes prioritaires</span></div>
+          <div style={{ padding: '10px 18px 14px' }}>
+            {data.alertes.map((a: any, i: number) => (
+              <div key={i} style={{ display: 'flex', gap: '10px', padding: '7px 0', borderBottom: i < data.alertes.length - 1 ? '1px solid #f8f5f0' : 'none' }}>
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: a.niveau === 'rouge' ? '#dc2626' : a.niveau === 'orange' ? '#f97316' : '#16a34a', marginTop: '5px', flexShrink: 0 }} />
+                <div style={{ fontSize: '11px', color: '#a09480', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '100px', flexShrink: 0 }}>{a.categorie}</div>
+                <div style={{ fontSize: '12px', color: '#2d2a24', lineHeight: 1.5 }}>{a.observation}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {data.budget && (
+        <div style={{ background: '#fff', border: '1px solid #e8e2d9', borderRadius: '12px', padding: '14px 18px', marginBottom: '10px' }}>
+          <div style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#92400e', marginBottom: '10px' }}>Budget total réel</div>
+          <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '28px', fontWeight: 700, color: '#1a1814' }}>
+            {data.budget.total_min?.toLocaleString('fr-FR')} € <span style={{ color: '#c4b99a', fontSize: '16px' }}>—</span> {data.budget.total_max?.toLocaleString('fr-FR')} €
+          </div>
+        </div>
+      )}
+      <div style={{ textAlign: 'center', marginTop: '20px' }}>
+        <button onClick={onPDF} style={{ background: '#1a1814', color: '#f5f2ed', border: 'none', borderRadius: '9px', padding: '12px 24px', fontFamily: 'DM Sans, sans-serif', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>↓ PDF Analyse initiale</button>
+      </div>
+    </div>
+  )
+}
+
+function RapportApresVisite({ data, scoreInitial, historique, showHistorique, setShowHistorique, onPDF, onChargerHistorique }: any) {
+  if (!data) return <div style={{ textAlign: 'center', padding: '40px', color: '#a09480' }}>Aucune analyse post-visite disponible</div>
+  const delta = data.delta_score || 0
+  return (
+    <div>
+      {/* Score révisé */}
+      <div style={{ background: delta >= 0 ? '#052e16' : '#1f0505', borderRadius: '14px', padding: '28px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+          <div>
+            <div style={{ fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: delta >= 0 ? '#4ade80' : '#f87171', marginBottom: '8px', fontWeight: 500 }}>
+              {data.verdict_revise?.decision}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
+              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '48px', fontWeight: 700, color: '#fff', lineHeight: 1 }}>
+                {data.score_revise}<span style={{ fontSize: '16px', color: '#8b6914' }}>/10</span>
+              </div>
+              <div style={{ fontSize: '13px', color: delta >= 0 ? '#4ade80' : '#f87171', fontWeight: 500 }}>
+                {delta >= 0 ? '▲' : '▼'} {Math.abs(delta)} vs {scoreInitial}/10 initial
+              </div>
+            </div>
+          </div>
+        </div>
+        {data.verdict_revise?.resume && (
+          <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.65)', lineHeight: 1.7, marginTop: '14px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '14px' }}>
+            {data.verdict_revise.resume}
+          </div>
+        )}
+      </div>
+
+      {/* Synthèse */}
+      <div style={{ fontSize: '13px', color: '#2d2a24', lineHeight: 1.7, marginBottom: '12px', fontStyle: 'italic', background: '#faf8f5', border: '1px solid #e8e2d9', borderRadius: '10px', padding: '14px' }}>
+        {data.synthese}
+      </div>
+
+      {/* Nouvelles alertes */}
+      {data.nouvelles_alertes?.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid #e8e2d9', borderRadius: '12px', marginBottom: '12px', overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid #f5f2ed' }}>
+            <span style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#dc2626' }}>Nouvelles alertes — diagnostics</span>
+          </div>
+          <div style={{ padding: '8px 16px 12px' }}>
+            {data.nouvelles_alertes.map((a: any, i: number) => (
+              <div key={i} style={{ display: 'flex', gap: '10px', padding: '7px 0', borderBottom: i < data.nouvelles_alertes.length - 1 ? '1px solid #f8f5f0' : 'none' }}>
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: a.niveau === 'rouge' ? '#dc2626' : a.niveau === 'orange' ? '#f97316' : '#16a34a', marginTop: '5px', flexShrink: 0 }} />
+                <div style={{ fontSize: '11px', color: '#a09480', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '90px', flexShrink: 0 }}>{a.categorie}</div>
+                <div style={{ fontSize: '12px', color: '#2d2a24', lineHeight: 1.5 }}>{a.observation}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Observations par doc */}
+      {data.observations_docs?.map((obs: any, i: number) => (
+        <div key={i} style={{ background: '#fff', border: '1px solid #e8e2d9', borderRadius: '10px', padding: '12px 16px', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#1a1814' }}>{obs.nom}</div>
+            <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: obs.impact === 'positif' ? '#f0fdf4' : obs.impact === 'négatif' ? '#fef2f2' : '#fafafa', color: obs.impact === 'positif' ? '#16a34a' : obs.impact === 'négatif' ? '#dc2626' : '#8a7d6b', border: `1px solid ${obs.impact === 'positif' ? '#bbf7d0' : obs.impact === 'négatif' ? '#fecaca' : '#e8e2d9'}` }}>{obs.impact}</span>
+          </div>
+          <div style={{ fontSize: '12px', color: '#4a4035', lineHeight: 1.6 }}>{obs.points_cles}</div>
+        </div>
+      ))}
+
+      {/* Historique */}
+      {!showHistorique ? (
+        <button onClick={onChargerHistorique} style={{ width: '100%', marginTop: '12px', background: 'transparent', border: '1px solid #e8e2d9', borderRadius: '8px', padding: '10px', fontFamily: 'DM Sans, sans-serif', fontSize: '12px', color: '#8a7d6b', cursor: 'pointer' }}>
+          Voir l'historique des analyses →
+        </button>
+      ) : (
+        <div style={{ marginTop: '12px' }}>
+          <div style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8a7d6b', marginBottom: '8px' }}>Historique</div>
+          {historique.map((h: any, i: number) => (
+            <div key={h.id} style={{ background: i === 0 ? '#faf8f5' : '#fff', border: '1px solid #e8e2d9', borderRadius: '8px', padding: '10px 14px', marginBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: '12px', color: '#1a1814' }}>
+                {i === 0 && <span style={{ fontSize: '10px', color: '#8b6914', marginRight: '6px' }}>● Dernière</span>}
+                Score : {h.analyse_complementaire?.score_revise}/10
+              </div>
+              <div style={{ fontSize: '11px', color: '#a09480' }}>{new Date(h.created_at).toLocaleDateString('fr-FR')}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+        <button onClick={onPDF} style={{ flex: 1, background: '#1a1814', color: '#f5f2ed', border: 'none', borderRadius: '9px', padding: '12px', fontFamily: 'DM Sans, sans-serif', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>
+          ↓ PDF Après visite
+        </button>
+      </div>
+    </div>
+  )
+}
+
+  const v = data.verdict
+  const decision = v?.decision || 'NÉGOCIER'
+  const cls = decision === 'ACHETER' ? '#052e16' : decision === 'FUIR' ? '#1f0505' : '#1c1003'
 
   return (
     <div>
-      {/* Verdict hero */}
-      <div style={{ background: cls, borderRadius: '14px', padding: '28px', marginBottom: '16px', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ background: cls, borderRadius: '14px', padding: '28px', marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: decision === 'ACHETER' ? '#4ade80' : decision === 'FUIR' ? '#f87171' : '#fbbf24', marginBottom: '8px', fontWeight: 500 }}>
@@ -423,17 +650,14 @@ function RapportModal({ data, ville, typeBien, onPDF }: { data: any, ville: stri
             {v?.prix_recommande && <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '40px', fontWeight: 700, color: '#fff', lineHeight: 1 }}>{v.prix_recommande.toLocaleString('fr-FR')} €</div>}
           </div>
           {data.scores && (
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '48px', fontWeight: 700, color: '#fff', lineHeight: 1 }}>
-                {data.scores.global}<span style={{ fontSize: '16px', color: '#8b6914' }}>/10</span>
-              </div>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '48px', fontWeight: 700, color: '#fff', lineHeight: 1 }}>
+              {data.scores.global}<span style={{ fontSize: '16px', color: '#8b6914' }}>/10</span>
             </div>
           )}
         </div>
         {v?.resume && <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.65)', lineHeight: 1.7, marginTop: '14px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '14px' }}>{v.resume}</div>}
       </div>
 
-      {/* Scores */}
       {data.scores && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '12px' }}>
           {[['État bâti', 'etat_bati'], ['Qualité/Prix', 'rapport_qualite_prix'], ['Potentiel', 'potentiel'], ['DPE', 'dpe']].map(([label, key]) => (
@@ -447,7 +671,6 @@ function RapportModal({ data, ville, typeBien, onPDF }: { data: any, ville: stri
         </div>
       )}
 
-      {/* Alertes */}
       {data.alertes?.length > 0 && (
         <div style={{ background: '#fff', border: '1px solid #e8e2d9', borderRadius: '12px', marginBottom: '10px', overflow: 'hidden' }}>
           <div style={{ padding: '14px 18px 10px', borderBottom: '1px solid #f5f2ed' }}>
@@ -465,7 +688,6 @@ function RapportModal({ data, ville, typeBien, onPDF }: { data: any, ville: stri
         </div>
       )}
 
-      {/* Budget résumé */}
       {data.budget && (
         <div style={{ background: '#fff', border: '1px solid #e8e2d9', borderRadius: '12px', padding: '14px 18px', marginBottom: '10px' }}>
           <div style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#92400e', marginBottom: '10px' }}>Budget total réel</div>
@@ -477,7 +699,82 @@ function RapportModal({ data, ville, typeBien, onPDF }: { data: any, ville: stri
 
       <div style={{ textAlign: 'center', marginTop: '20px' }}>
         <button onClick={onPDF} style={{ background: '#1a1814', color: '#f5f2ed', border: 'none', borderRadius: '9px', padding: '12px 24px', fontFamily: 'DM Sans, sans-serif', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>
-          ↓ Télécharger le rapport PDF complet
+          ↓ PDF Analyse initiale
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ApresVisiteContent({ data, ac, scoreColor, onPDFApres, showHistorique, setShowHistorique }: any) {
+  if (!ac) return <div style={{ textAlign: 'center', padding: '40px', color: '#a09480' }}>Aucune analyse post-visite</div>
+
+  const delta = ac.delta_score || 0
+  const scoreInitial = data.scores?.global
+
+  return (
+    <div>
+      {/* Score révisé vs initial */}
+      <div style={{ background: delta >= 0 ? '#052e16' : '#1f0505', borderRadius: '14px', padding: '28px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+          <div>
+            <div style={{ fontSize: '10px', letterSpacing: '0.12em', textTransform: 'uppercase', color: delta >= 0 ? '#4ade80' : '#f87171', marginBottom: '8px', fontWeight: 500 }}>
+              {ac.verdict_revise?.decision}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
+              <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '48px', fontWeight: 700, color: '#fff', lineHeight: 1 }}>
+                {ac.score_revise}<span style={{ fontSize: '16px', color: '#8b6914' }}>/10</span>
+              </div>
+              <div style={{ fontSize: '13px', color: delta >= 0 ? '#4ade80' : '#f87171', fontWeight: 500 }}>
+                {delta >= 0 ? '▲' : '▼'} {Math.abs(delta)} vs {scoreInitial}/10
+              </div>
+            </div>
+          </div>
+        </div>
+        {ac.verdict_revise?.resume && (
+          <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.65)', lineHeight: 1.7, marginTop: '14px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '14px' }}>
+            {ac.verdict_revise.resume}
+          </div>
+        )}
+      </div>
+
+      {/* Synthèse */}
+      <div style={{ fontSize: '13px', color: '#2d2a24', lineHeight: 1.7, marginBottom: '12px', fontStyle: 'italic', background: '#faf8f5', border: '1px solid #e8e2d9', borderRadius: '10px', padding: '14px' }}>
+        {ac.synthese}
+      </div>
+
+      {/* Nouvelles alertes */}
+      {ac.nouvelles_alertes?.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid #e8e2d9', borderRadius: '12px', marginBottom: '12px', overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid #f5f2ed' }}>
+            <span style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#dc2626' }}>Nouvelles alertes — diagnostics</span>
+          </div>
+          <div style={{ padding: '8px 16px 12px' }}>
+            {ac.nouvelles_alertes.map((a: any, i: number) => (
+              <div key={i} style={{ display: 'flex', gap: '10px', padding: '7px 0', borderBottom: i < ac.nouvelles_alertes.length - 1 ? '1px solid #f8f5f0' : 'none' }}>
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: a.niveau === 'rouge' ? '#dc2626' : a.niveau === 'orange' ? '#f97316' : '#16a34a', marginTop: '5px', flexShrink: 0 }} />
+                <div style={{ fontSize: '11px', color: '#a09480', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '90px', flexShrink: 0 }}>{a.categorie}</div>
+                <div style={{ fontSize: '12px', color: '#2d2a24', lineHeight: 1.5 }}>{a.observation}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Observations par doc */}
+      {ac.observations_docs?.map((obs: any, i: number) => (
+        <div key={i} style={{ background: '#fff', border: '1px solid #e8e2d9', borderRadius: '10px', padding: '12px 16px', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#1a1814' }}>{obs.nom}</div>
+            <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: obs.impact === 'positif' ? '#f0fdf4' : obs.impact === 'négatif' ? '#fef2f2' : '#fafafa', color: obs.impact === 'positif' ? '#16a34a' : obs.impact === 'négatif' ? '#dc2626' : '#8a7d6b', border: `1px solid ${obs.impact === 'positif' ? '#bbf7d0' : obs.impact === 'négatif' ? '#fecaca' : '#e8e2d9'}` }}>{obs.impact}</span>
+          </div>
+          <div style={{ fontSize: '12px', color: '#4a4035', lineHeight: 1.6 }}>{obs.points_cles}</div>
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+        <button onClick={onPDFApres} style={{ flex: 1, background: '#1a1814', color: '#f5f2ed', border: 'none', borderRadius: '9px', padding: '12px', fontFamily: 'DM Sans, sans-serif', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>
+          ↓ PDF Après visite
         </button>
       </div>
     </div>

@@ -335,3 +335,107 @@ export async function genererPDF(data: any, ville?: string, typeBien?: string): 
   a.click()
   URL.revokeObjectURL(url)
 }
+
+// Document PDF après visite
+function NidoPDFApresVisiteDocument({ data, ac, ville, typeBien }: { data: any, ac: any, ville?: string, typeBien?: string }) {
+  const fmt = (n: number) => n ? n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : '—'
+  const date = new Date().toLocaleDateString('fr-FR')
+  const delta = ac?.delta_score || 0
+
+  return (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        {/* Spacer pages suivantes */}
+        <View style={{ height: 24, backgroundColor: '#f5f2ed' }} fixed />
+
+        {/* Header */}
+        <View style={{ backgroundColor: '#1a1814', padding: 0 }}>
+          <View style={{ paddingHorizontal: 40, paddingTop: 32, paddingBottom: 28 }}>
+            <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 28, color: '#ffffff', letterSpacing: 2, marginBottom: 4 }}>NIDO</Text>
+            <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5, textTransform: 'uppercase' }}>ANALYSE APRÈS VISITE · {date}</Text>
+            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 8 }}>{ville || ''}{typeBien ? ` · ${typeBien}` : ''}</Text>
+          </View>
+        </View>
+
+        <View style={styles.body}>
+          {/* Score révisé */}
+          <View style={[styles.sectionCard, { backgroundColor: delta >= 0 ? '#052e16' : '#1f0505', marginBottom: 12 }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View>
+                <Text style={{ fontSize: 8, color: delta >= 0 ? '#4ade80' : '#f87171', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 6 }}>{ac?.verdict_revise?.decision}</Text>
+                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 40, color: '#ffffff' }}>
+                  {ac?.score_revise}<Text style={{ fontSize: 14, color: '#8b6914' }}>/10</Text>
+                </Text>
+                <Text style={{ fontSize: 11, color: delta >= 0 ? '#4ade80' : '#f87171', marginTop: 4 }}>
+                  {delta >= 0 ? '▲' : '▼'} {Math.abs(delta)} point{Math.abs(delta) > 1 ? 's' : ''} vs score initial ({data?.scores?.global}/10)
+                </Text>
+              </View>
+            </View>
+            {ac?.verdict_revise?.resume && (
+              <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 12, lineHeight: 1.6, borderTop: '1pt solid rgba(255,255,255,0.1)', paddingTop: 10 }}>
+                {ac.verdict_revise.resume}
+              </Text>
+            )}
+          </View>
+
+          {/* Synthèse */}
+          {ac?.synthese && (
+            <View style={[styles.sectionCard, { marginBottom: 12 }]} wrap={false}>
+              <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>Synthèse</Text>
+              <Text style={{ fontSize: 10, color: '#4a4035', lineHeight: 1.7, fontStyle: 'italic' }}>{ac.synthese}</Text>
+            </View>
+          )}
+
+          {/* Nouvelles alertes */}
+          {ac?.nouvelles_alertes?.length > 0 && (
+            <View style={[styles.sectionCard, { marginBottom: 12 }]} wrap={false}>
+              <View style={styles.sectionHead}>
+                <Text style={[styles.sectionTitle, { color: '#dc2626' }]}>Nouvelles alertes — diagnostics</Text>
+              </View>
+              {ac.nouvelles_alertes.map((a: any, i: number) => (
+                <View key={i} style={{ flexDirection: 'row', gap: 10, paddingVertical: 5, borderBottom: i < ac.nouvelles_alertes.length - 1 ? '0.5pt solid #f8f5f0' : 'none' }}>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: a.niveau === 'rouge' ? '#dc2626' : a.niveau === 'orange' ? '#f97316' : '#16a34a', marginTop: 3 }} />
+                  <Text style={{ fontSize: 8, color: '#a09480', textTransform: 'uppercase', letterSpacing: 0.5, width: 80 }}>{a.categorie}</Text>
+                  <Text style={{ fontSize: 9, color: '#2d2a24', flex: 1, lineHeight: 1.5 }}>{a.observation}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Observations par document */}
+          {ac?.observations_docs?.map((obs: any, i: number) => (
+            <View key={i} style={[styles.sectionCard, { marginBottom: 8 }]} wrap={false}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 10, color: '#1a1814' }}>{obs.nom}</Text>
+                <Text style={{ fontSize: 8, color: obs.impact === 'positif' ? '#16a34a' : obs.impact === 'négatif' ? '#dc2626' : '#8a7d6b' }}>{obs.impact}</Text>
+              </View>
+              <Text style={{ fontSize: 9, color: '#4a4035', lineHeight: 1.6 }}>{obs.points_cles}</Text>
+            </View>
+          ))}
+
+          {/* Rappel analyse initiale */}
+          <View style={[styles.sectionCard, { backgroundColor: '#f5f2ed', marginTop: 8 }]} wrap={false}>
+            <Text style={{ fontSize: 8, color: '#a09480', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Rappel — Analyse initiale</Text>
+            <Text style={{ fontSize: 10, color: '#4a4035', lineHeight: 1.6 }}>{data?.verdict?.resume}</Text>
+          </View>
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footer} fixed>
+          <Text style={styles.footerLeft}>NIDO · Analyse après visite par IA · {date}</Text>
+          <Text style={styles.footerRight}>Outil d'aide à la décision — ne remplace pas un diagnostic certifié</Text>
+        </View>
+      </Page>
+    </Document>
+  )
+}
+
+export async function genererPDFApresVisite(data: any, ac: any, ville?: string, typeBien?: string): Promise<void> {
+  const blob = await pdf(<NidoPDFApresVisiteDocument data={data} ac={ac} ville={ville} typeBien={typeBien} />).toBlob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `NIDO-apres-visite-${new Date().toISOString().split('T')[0]}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
+}
