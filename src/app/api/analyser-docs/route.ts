@@ -4,23 +4,6 @@ import { supabaseAdmin } from '@/lib/supabase'
 
 const anthropic = new Anthropic()
 
-// Extraire le texte d'un PDF base64 via pdf-parse
-async function extraireTextePDF(base64: string): Promise<string> {
-  try {
-    // @ts-ignore
-    const pdfParse = require('pdf-parse')
-    const buffer = Buffer.from(base64, 'base64')
-    const result = await pdfParse(buffer, { max: 3 }) // max 3 pages
-    return result.text
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 4000) // max 4000 caractères par doc
-  } catch (e) {
-    console.error('Erreur extraction PDF:', e)
-    return '[Texte non extractible]'
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
@@ -59,16 +42,37 @@ export async function POST(request: NextRequest) {
 
     const rapportOriginal = analyse.rapport_complet
 
-    // Extraire le texte de chaque document
+    // Extraire le texte de chaque document — fallback base64 si scan
     const docsTextes: string[] = []
+    const docsFallbackBase64: any[] = [] // docs à envoyer en base64 si texte insuffisant
+
     for (const doc of documents) {
-      if (doc.base64) {
-        if (doc.media_type === 'application/pdf') {
-          const texte = await extraireTextePDF(doc.base64)
+      if (!doc.base64) continue
+
+      if (doc.media_type === 'application/pdf') {
+        let texte = ''
+        try {
+          // @ts-ignore
+          const pdfParse = require('pdf-parse')
+          const buffer = Buffer.from(doc.base64, 'base64')
+          const result = await pdfParse(buffer, { max: 3 })
+          texte = result.text.replace(/\s+/g, ' ').trim().slice(0, 4000)
+        } catch (e) {
+          console.error('pdf-parse erreur:', e)
+        }
+
+        if (texte.length >= 100) {
+          // Texte natif — pas besoin d'envoyer le binaire
           docsTextes.push(`=== ${doc.type.toUpperCase()} : ${doc.nom_fichier} ===\n${texte}`)
         } else {
-          docsTextes.push(`=== ${doc.type.toUpperCase()} : ${doc.nom_fichier} ===\n[Document image]`)
+          // PDF scanné — on envoie le base64 à Claude directement
+          docsTextes.push(`=== ${doc.type.toUpperCase()} : ${doc.nom_fichier} === [document image ci-joint]`)
+          docsFallbackBase64.push(doc)
         }
+      } else {
+        // Image directe
+        docsTextes.push(`=== ${doc.type.toUpperCase()} : ${doc.nom_fichier} === [image ci-jointe]`)
+        docsFallbackBase64.push(doc)
       }
     }
 
@@ -102,11 +106,20 @@ Réponds UNIQUEMENT en JSON valide :
   "synthese": "string"
 }`
 
+    // Construire les messages — texte + éventuels base64 pour PDFs scannés
+    const contentBlocks: any[] = [{ type: 'text', text: prompt }]
+    for (const doc of docsFallbackBase64) {
+      contentBlocks.push({
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: doc.base64 }
+      })
+    }
+
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-5',
       max_tokens: 2000,
       temperature: 0.3,
-      messages: [{ role: 'user', content: prompt }]
+      messages: [{ role: 'user', content: contentBlocks }]
     })
 
     const text = response.content.map((b: any) => b.text || '').join('')
