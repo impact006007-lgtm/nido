@@ -7,7 +7,7 @@ const anthropic = new Anthropic()
 // Extraire le texte d'un PDF base64 via pdf-parse
 async function extraireTextePDF(base64: string): Promise<string> {
   try {
-    const pdfParse = (await import('pdf-parse')).default
+    const pdfParse = await import('pdf-parse').then(m => m.default || m)
     const buffer = Buffer.from(base64, 'base64')
     const result = await pdfParse(buffer, { max: 3 }) // max 3 pages
     return result.text
