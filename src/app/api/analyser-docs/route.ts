@@ -20,17 +20,24 @@ export async function POST(request: NextRequest) {
     // documents = [{ type, nom_fichier, storage_path, base64, media_type }]
 
     // Récupérer l'analyse originale
-    const { data: analyse } = await supabaseAdmin
+    const { data: analyse, error: analyseError } = await supabaseAdmin
       .from('analyses')
-      .select('rapport_complet, ville, type_bien, nb_analyses_docs')
+      .select('rapport_complet, ville, type_bien, analyse_complementaire')
       .eq('id', analyse_id)
       .single()
 
-    if (!analyse) return NextResponse.json({ error: 'Analyse introuvable' }, { status: 404 })
+    if (analyseError || !analyse) {
+      console.error('Analyse introuvable:', analyseError, 'analyse_id:', analyse_id)
+      return NextResponse.json({ error: 'Analyse introuvable' }, { status: 404 })
+    }
 
-    // Garde-fou : max 3 analyses de docs par bien
-    const nbActuel = analyse.nb_analyses_docs || 0
-    if (nbActuel >= 3) {
+    // Compter les analyses docs existantes
+    const { count: nbActuel } = await supabaseAdmin
+      .from('documents')
+      .select('id', { count: 'exact', head: true })
+      .eq('analyse_id', analyse_id)
+
+    if ((nbActuel || 0) >= 3) {
       return NextResponse.json({ error: 'Limite de 3 analyses par bien atteinte' }, { status: 429 })
     }
 
